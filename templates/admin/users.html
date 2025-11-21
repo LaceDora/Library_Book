@@ -1,0 +1,212 @@
+{% extends "admin/base.html" %}
+{#
+  templates/admin/users.html
+
+  Trang quản lý người dùng cho admin: tìm kiếm, thay đổi vai trò, xem lịch sử và xóa user.
+  - Xóa user sẽ mở modal xác nhận và gọi route `admin_bp.delete_user`.
+  - Lưu ý: không thể thay đổi vai trò hoặc xóa tài khoản admin từ UI này.
+#}
+{% block content %}
+<h2 class="mb-4">Quản lý người dùng</h2>
+
+<div class="card shadow">
+  <div class="card-body">
+    <!-- Search form -->
+    <form method="GET" class="mb-4">
+      <div class="input-group">
+        <input type="text" name="search" class="form-control" placeholder="Tìm kiếm theo tên người dùng..." 
+               value="{{ request.args.get('search', '') }}">
+        <button class="btn btn-primary" type="submit">Tìm kiếm</button>
+  <a href="{{ url_for('admin_bp.users') }}" class="btn btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+
+    <!-- Users table -->
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Tên người dùng</th>
+            <th>MSSV/MSCB</th>
+            <th>Email</th>
+            <th>Số điện thoại</th>
+            <th>Vai trò</th>
+            <th>Trạng thái</th>
+            <th>Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users.items %}
+          <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>
+              {{ user.student_staff_id or '—' }}
+              {% if not user.is_admin %}
+              <button type="button" class="btn btn-link btn-sm p-0 ms-2" 
+                      onclick="editStudentId({{ user.id }}, '{{ user.student_staff_id }}', '{{ user.username }}')"
+                      title="Sửa MSSV/MSCB">
+                <i class="bi bi-pencil-square"></i>
+              </button>
+              {% endif %}
+            </td>
+            <td>{{ user.email or '—' }}</td>
+            <td>{{ user.phone or '—' }}</td>
+            <td>
+              {% if user.is_admin %}
+                <span class="badge bg-primary">Quản thư</span>
+              {% else %}
+                <form method="post" action="{{ url_for('admin_bp.update_user_role', user_id=user.id) }}" class="d-inline">
+                  <div class="input-group input-group-sm">
+                    <select name="role" class="form-select form-select-sm">
+                      <option value="student" {% if user.role == 'student' %}selected{% endif %}>Sinh viên</option>
+                      <option value="lecturer" {% if user.role == 'lecturer' %}selected{% endif %}>Giảng viên</option>
+                      <option value="staff" {% if user.role == 'staff' %}selected{% endif %}>Cán bộ</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" type="submit" title="Lưu vai trò">Lưu</button>
+                  </div>
+                </form>
+              {% endif %}
+            </td>
+            <td>
+              {% if user.is_active %}
+                <span class="badge bg-success">Hoạt động</span>
+              {% else %}
+                <span class="badge bg-secondary">Bị khoá</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if not user.is_admin %}
+              <div class="btn-group" role="group">
+                <a href="{{ url_for('admin_bp.user_history', user_id=user.id) }}" class="btn btn-sm btn-info">
+                  <i class="bi bi-clock-history"></i> Lịch sử
+                </a>
+                <form method="post" action="{{ url_for('admin_bp.toggle_user_active', user_id=user.id) }}" style="display:inline;">
+                  <button class="btn btn-sm btn-warning" title="Bật/Tắt tài khoản">{% if user.is_active %}<i class="bi bi-person-dash"></i> Khoá{% else %}<i class="bi bi-person-check"></i> Kích hoạt{% endif %}</button>
+                </form>
+
+                <button type="button" class="btn btn-sm btn-danger" 
+                  onclick="confirmDelete({{ user.id }}, '{{ user.username }}')">
+                  <i class="bi bi-trash"></i> Xóa
+                </button>
+              </div>
+              {% else %}
+              <em class="text-muted">Không có hành động</em>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center">Không có người dùng nào.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if users.pages > 1 %}
+    <nav class="mt-3">
+      <ul class="pagination justify-content-center">
+        {% if users.has_prev %}
+        <li class="page-item">
+          <a class="page-link" href="{{ url_for('admin_bp.users', page=users.prev_num) }}">Trước</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+          <span class="page-link">Trước</span>
+        </li>
+        {% endif %}
+
+        <li class="page-item disabled">
+          <span class="page-link">Trang {{ users.page }} / {{ users.pages }}</span>
+        </li>
+
+        {% if users.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="{{ url_for('admin_bp.users', page=users.next_num) }}">Sau</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+          <span class="page-link">Sau</span>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Xác nhận xóa người dùng</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Bạn có chắc chắn muốn xóa người dùng <strong id="deleteUserName"></strong>?
+        Hành động này sẽ xóa toàn bộ lịch sử mượn sách của họ.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+        <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Xác nhận xóa</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Hàm escape string an toàn cho JavaScript
+function escapeJS(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function confirmDelete(userId, username) {
+  document.getElementById('deleteUserName').textContent = username;
+  document.getElementById('confirmDeleteBtn').href = "{{ url_for('admin_bp.delete_user', user_id=0) }}".replace('0', userId);
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+function editStudentId(userId, currentId, username) {
+  document.getElementById('editStudentIdForm').action = "{{ url_for('admin_bp.update_student_id', user_id=0) }}".replace('0', userId);
+  document.getElementById('editUsername').textContent = username;
+  document.getElementById('studentStaffId').value = currentId || '';
+  new bootstrap.Modal(document.getElementById('editStudentIdModal')).show();
+}
+</script>
+
+<!-- Edit Student/Staff ID Modal -->
+<div class="modal fade" id="editStudentIdModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Chỉnh sửa MSSV/MSCB</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="editStudentIdForm" method="post">
+        <div class="modal-body">
+          <p>Chỉnh sửa MSSV/MSCB cho người dùng: <strong id="editUsername"></strong></p>
+          <div class="mb-3">
+            <label for="studentStaffId" class="form-label">MSSV/MSCB mới</label>
+            <input type="text" class="form-control" id="studentStaffId" name="student_staff_id" 
+                   required pattern="[0-9]+" minlength="7" maxlength="10">
+            <div class="form-text">Chỉ nhập số, độ dài từ 7-10 ký tự.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

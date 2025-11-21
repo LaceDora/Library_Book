@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="vi">
+<!--
+  templates/base.html
+
+  Layout chính cho giao diện người dùng (public): chứa navbar, flash messages,
+  chèn CSS/JS chung và include nội dung cụ thể bằng block `content`.
+
+  Ghi chú:
+  - Meta tag `user-logged-in` được dùng bởi `static/js/main.js` để kiểm tra trạng thái đăng nhập trước các hành động AJAX.
+  - Toast container và JS được thêm ở cuối file.
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if session.get('user_id') %}<meta name="user-logged-in" content="true">{% endif %}
+  <title>Thư viện Python</title>
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/chatbot.css') }}" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+    <div class="container">
+  <a class="navbar-brand fw-bold text-primary d-flex align-items-center" href="{{ url_for('main_bp.index') }}">
+        <img src="{{ url_for('static', filename='uploads/logo.jpg') }}" alt="Logo" class="navbar-logo">
+        Thư viện
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto align-items-center">
+          <li class="nav-item me-3">
+            <a class="nav-link" href="{{ url_for('main_bp.index') }}">Trang chủ</a>
+          </li>
+          <!-- Category dropdown -->
+          <li class="nav-item dropdown me-3">
+            <a class="nav-link dropdown-toggle" href="#" id="categoryMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">Thể loại sách</a>
+            <ul class="dropdown-menu" aria-labelledby="categoryMenu">
+              <li><a class="dropdown-item" href="{{ url_for('main_bp.category', slug='am_nhac') }}">Âm nhạc</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('main_bp.category', slug='lap_trinh') }}">Lập trình</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('main_bp.category', slug='truyen_tranh') }}">Truyện tranh</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('main_bp.category', slug='y_hoc') }}">Y học</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('main_bp.category', slug='tam_ly') }}">Tâm lý</a></li>
+            </ul>
+          </li>
+          <li class="nav-item me-3">
+            <a class="nav-link" href="{{ url_for('main_bp.books') }}">Tất cả sách</a>
+          </li>
+
+          {% if session.get("user_id") %}
+            <li class="nav-item me-3">
+              <a class="nav-link" href="{{ url_for('user_bp.borrows') }}">Lịch sử mượn</a>
+            </li>
+          {% endif %}
+
+          {% if session.get("is_admin") %}
+            <li class="nav-item me-3">
+              <a class="nav-link" href="{{ url_for('user_bp.list_users') }}">Users</a>
+            </li>
+          {% endif %}
+
+          {% if session.get('user_id') %}
+            <!-- Logged in user dropdown -->
+            <li class="nav-item dropdown me-3">
+              <a class="nav-link dropdown-toggle text-secondary" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                {{ session.get('username') }}
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                <li><a class="dropdown-item" href="{{ url_for('user_bp.profile') }}"><i class="bi bi-person me-2"></i>Thông tin cá nhân</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="{{ url_for('auth_bp.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Đăng xuất</a></li>
+              </ul>
+            </li>
+          {% else %}
+            <!-- Account dropdown for guests -->
+            <li class="nav-item dropdown me-3">
+              <a class="nav-link dropdown-toggle" href="#" id="accountMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Tài khoản
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenu">
+                <li><a class="dropdown-item" href="{{ url_for('auth_bp.login') }}">
+                  <i class="bi bi-box-arrow-in-right me-2"></i>Đăng nhập
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('auth_bp.register') }}">
+                  <i class="bi bi-person-plus me-2"></i>Đăng ký
+                </a></li>
+              </ul>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Flash messages -->
+  <div class="container mt-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {# Render each unique message only once to avoid duplicate alerts #}
+        {% set ns = namespace(seen=[]) %}
+        {% for category, message in messages %}
+          {% if message not in ns.seen %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show text-center" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% set ns.seen = ns.seen + [message] %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- Nội dung chính -->
+  <div class="page-wrapper">
+    <div class="page-content container mt-4 mb-5">
+      {% block content %}{% endblock %}
+    </div>
+
+    <footer class="site-footer text-center mt-5 text-muted small">
+      <hr>
+      <p>© 2025 - Đề Tài Web Thư viện | Môn: Lập Trình Python</p>
+    </footer>
+  </div>
+
+  <!-- Toast container for AJAX actions -->
+  <div id="ajaxToastContainer"></div>
+  
+  <!-- Bootstrap Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+
+  <script>
+  // Search autocomplete logic: attach to inputs with class 'search-autocomplete'
+  (function(){
+    function debounce(fn, delay){
+      var t; return function(){
+        var args = arguments; clearTimeout(t); t = setTimeout(function(){ fn.apply(null, args); }, delay);
+      };
+    }
+
+    function makeSuggestionItem(item){
+      var a = document.createElement('a');
+      a.className = 'list-group-item list-group-item-action';
+      a.href = item.url;
+      a.innerHTML = '<div class="fw-bold">' + (item.title || '') + '</div>' +
+                    '<div class="small text-muted">' + (item.author || '') + ' • ' + (item.available_quantity || 0) + ' có sẵn</div>';
+      return a;
+    }
+
+    function attachAutocomplete(input){
+      var container = input.parentNode.querySelector('#search-suggestions');
+      if(!container) return;
+      var q = '';
+
+      var doSearch = debounce(function(term){
+        term = (term || '').trim();
+        if(!term){ container.style.display = 'none'; container.innerHTML = ''; return; }
+        fetch('/_suggest_books?q=' + encodeURIComponent(term))
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            container.innerHTML = '';
+            if(!data || !data.length){ container.style.display = 'none'; return; }
+            data.forEach(function(it){ container.appendChild(makeSuggestionItem(it)); });
+            container.style.display = 'block';
+          }).catch(function(err){ console.error('Suggest error', err); container.style.display='none'; });
+      }, 150);
+
+      input.addEventListener('input', function(e){ doSearch(e.target.value); });
+      // hide on blur
+      input.addEventListener('blur', function(){ setTimeout(function(){ container.style.display='none'; }, 150); });
+      // show full list when focusing with existing value
+      input.addEventListener('focus', function(e){ if(input.value) doSearch(input.value); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      var inputs = document.querySelectorAll('input.search-autocomplete');
+      inputs.forEach(function(inp){ attachAutocomplete(inp); });
+    });
+  })();
+  </script>
+
+  <script>
+    // Initialize all dropdowns
+    document.addEventListener('DOMContentLoaded', function() {
+      var dropdowns = document.querySelectorAll('.dropdown-toggle');
+      dropdowns.forEach(dropdown => {
+        new bootstrap.Dropdown(dropdown);
+      });
+    });
+  </script>
+</body>
+</html>

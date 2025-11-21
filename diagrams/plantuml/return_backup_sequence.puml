@@ -1,0 +1,23 @@
+@startuml
+actor "Thủ thư (Admin)" as Admin
+participant "Giao diện (View)\nAdminPanel" as View
+participant "Bộ xử lý (Controller)\nReturnController" as Controller
+database "MySQL Database" as DB
+participant "System Cronjob" as Cron
+
+Admin -> View: Scan mã sách / Nhập ID phiếu mượn
+View -> Controller: submitReturn(borrow_id, condition, notes)
+Controller -> DB: UPDATE borrow SET return_date = NOW(), return_condition = ..., return_notes = ... WHERE id = borrow_id
+Controller -> DB: SELECT book_id FROM borrow WHERE id = borrow_id
+Controller -> DB: UPDATE book SET available_quantity = available_quantity + 1 WHERE id = book_id
+Controller -> DB: INSERT INTO audit (action='return', details=...)
+View <-- Controller: Thông báo "Trả sách thành công"
+
+== Backup process ==
+Cron -> DB: SELECT * FROM borrow WHERE return_date < NOW() - INTERVAL 1 YEAR
+DB --> Cron: list of old returns
+loop Duyệt từng phiếu cũ
+  Cron -> DB: INSERT INTO borrow_backup SELECT * FROM borrow WHERE id = ...
+  Cron -> DB: DELETE FROM borrow WHERE id = ...
+end
+@enduml

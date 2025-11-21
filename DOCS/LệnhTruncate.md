@@ -1,0 +1,1 @@
+mysql -u root -D library_db -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE audit; TRUNCATE TABLE borrow; SET FOREIGN_KEY_CHECKS=1; UPDATE book SET views_count=0, views=0, available_quantity=quantity; ALTER TABLE audit AUTO_INCREMENT=1; ALTER TABLE borrow AUTO_INCREMENT=1;"

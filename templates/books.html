@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{#
+  templates/books.html
+
+  Trang danh sách sách (dùng cho cả danh sách chung và trang theo category).
+  Mỗi item có thể có nút mượn (AJAX) với class `borrow-btn` và id qty `book-qty-<id>` để JS cập nhật số lượng.
+#}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold text-primary">{% if category %}Thể loại: {{ category }}{% else %}Danh sách các sách{% endif %}</h2>
+  </div>
+  {% if session.get("is_admin") %}
+  <a href="{{ url_for('admin_bp.add_book') }}" class="btn btn-success">
+       Thêm sách mới
+    </a>
+  {% endif %}
+</div>
+
+{# Search form: post to category route when category_slug is set, else to books list #}
+<form method="GET" action="{{ url_for('main_bp.category', slug=category_slug) if category_slug else url_for('main_bp.books') }}" class="mb-4">
+  <div class="input-group">
+    <input id="search-input-books" type="text" name="search" class="form-control search-autocomplete" placeholder="Tìm kiếm theo tiêu đề hoặc tác giả..." value="{{ request.args.get('search', '') }}">
+    <button class="btn btn-primary" type="submit">Tìm kiếm</button>
+      <a href="{{ url_for('main_bp.books') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center">Reset</a>
+        <div id="search-suggestions" class="list-group position-absolute w-100" style="z-index:1050; top:100%; display:none;"></div>
+      </div>
+</form>
+
+<div class="row">
+  {% for book in books.items %}
+  <div class="col-md-4 mb-4">
+    <div class="card h-100 shadow-sm border-0">
+    {% if book.image_url %}
+  <a href="{{ url_for('book_bp.detail', book_id=book.id) }}">
+      <img src="{{ book.image_url }}" class="card-img-top book-img" alt="Bìa sách">
+    </a>
+  {% else %}
+  <a href="{{ url_for('book_bp.detail', book_id=book.id) }}"><div class="book-image-placeholder">Không có ảnh</div></a>
+      {% endif %}
+
+      <div class="card-body">
+  <h5 class="card-title text-primary"><a href="{{ url_for('book_bp.detail', book_id=book.id) }}" class="text-decoration-none text-primary">{{ book.title }}</a></h5>
+        <p class="card-text mb-1"><strong>Tác giả:</strong> {{ book.author }}</p>
+        <p class="card-text"><strong>Số lượng:</strong> <span id="book-qty-{{ book.id }}">{{ book.available_quantity }}</span></p>
+      </div>
+
+      <div class="card-footer bg-white border-0 text-center d-flex gap-1 justify-content-center flex-wrap">
+        {% if session.get("user_id") %}
+          {% if book.available_quantity > 0 %}
+              {# AJAX borrow button - handled by global JS #}
+              <button data-book-id="{{ book.id }}" class="btn btn-sm btn-success borrow-btn book-action-btn d-inline-flex align-items-center justify-content-center">Mượn</button>
+          {% else %}
+            <button class="btn btn-sm btn-secondary book-action-btn d-inline-flex align-items-center justify-content-center" disabled>Hết</button>
+          {% endif %}
+        {% else %}
+          <a href="{{ url_for('auth_bp.login') }}" class="btn btn-sm btn-outline-primary book-login-btn d-inline-flex align-items-center justify-content-center">Đăng nhập</a>
+        {% endif %}
+
+        {% if session.get("is_admin") %}
+          <a href="{{ url_for('admin_bp.edit_book', book_id=book.id) }}" class="btn btn-sm btn-warning book-action-btn d-inline-flex align-items-center justify-content-center">Sửa</a>
+          <a href="{{ url_for('admin_bp.delete_book', book_id=book.id) }}" class="btn btn-sm btn-danger book-action-btn d-inline-flex align-items-center justify-content-center"
+             onclick="return confirm('Xác nhận xóa sách này?')">Xóa</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <em>Không tìm thấy sách nào.</em>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Phân trang -->
+{% if books.pages > 1 %}
+<nav aria-label="Page navigation">
+  <ul class="pagination justify-content-center">
+  {% if books.has_prev %}
+  <li class="page-item"><a class="page-link" href="{{ url_for('main_bp.category', slug=category_slug, page=books.prev_num) if category_slug else url_for('main_bp.books', page=books.prev_num) }}">Trước</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Trước</span></li>
+    {% endif %}
+
+    <li class="page-item disabled"><span class="page-link">Trang {{ books.page }} / {{ books.pages }}</span></li>
+
+    {% if books.has_next %}
+  <li class="page-item"><a class="page-link" href="{{ url_for('main_bp.category', slug=category_slug, page=books.next_num) if category_slug else url_for('main_bp.books', page=books.next_num) }}">Sau</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Sau</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

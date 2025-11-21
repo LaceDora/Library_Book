@@ -1,0 +1,321 @@
+body {
+  font-family: "Segoe UI", Roboto, sans-serif;
+}
+
+.navbar-brand {
+  font-size: 1.3rem;
+}
+
+/* Dropdown menu styling */
+.dropdown-menu {
+  border: none;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-radius: 0.5rem;
+}
+
+.dropdown-item {
+  padding: 0.5rem 1.5rem;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+  color: #0d6efd;
+}
+
+.dropdown-item i {
+  color: #6c757d;
+}
+
+.dropdown-divider {
+  margin: 0.5rem 0;
+}
+
+.card {
+  transition: transform 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+}
+
+footer {
+  margin-top: 60px;
+  /* Ensure footer sits at bottom when page content is short */
+  background: transparent;
+}
+
+/* Make the page use a column flex layout so footer is pushed to bottom */
+html, body {
+  height: 100%;
+}
+
+/* removed empty rule previously targeting the first container */
+
+/* Use a wrapper to stretch main area */
+.page-wrapper {
+  min-height: calc(100vh - 120px); /* header + footer approx height */
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1 0 auto; /* take remaining space so footer stays bottom */
+}
+
+.site-footer {
+  flex-shrink: 0;
+}
+
+/* Auth pages styles */
+.auth-page {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 460px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,255,0.95));
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(20,20,40,0.08), 0 2px 8px rgba(20,20,40,0.06);
+  padding: 28px;
+  border: 1px solid rgba(20,20,40,0.03);
+  animation: fadeUp 420ms ease forwards;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.auth-brand .logo {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  border-radius: 10px;
+}
+
+.auth-card h3 {
+  margin: 0 0 12px 0;
+}
+
+.form-control:focus {
+  box-shadow: 0 6px 18px rgba(99,102,241,0.08);
+  border-color: #6366f1;
+}
+
+.input-with-icon {
+  position: relative;
+}
+.input-with-icon .icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+.input-with-icon input {
+  padding-left: 40px;
+  /* make room for a right-side control (toggle password) */
+  padding-right: 48px;
+}
+
+/* Toast container position */
+#ajaxToastContainer {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  padding: 1rem;
+  z-index: 1080;
+}
+
+/* Book list button styles */
+.book-action-btn {
+  min-width: 65px;
+}
+
+.book-login-btn {
+  min-width: 100px;
+}
+
+
+/* Toggle button placed inside the input area */
+#togglePwd, .input-with-icon .toggle-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: rgba(0,0,0,0.04);
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 8px;
+  color: #374151;
+  transition: background 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+}
+#togglePwd:hover, .input-with-icon .toggle-btn:hover {
+  background: rgba(0,0,0,0.06);
+  transform: translateY(-50%) scale(1.02);
+}
+#togglePwd:focus, .input-with-icon .toggle-btn:focus {
+  outline: none;
+  box-shadow: 0 6px 18px rgba(99,102,241,0.10);
+}
+
+/* Book cover styles */
+.book-cover-link {
+  display: block;
+  text-decoration: none;
+  background: transparent;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.book-cover {
+  transition: transform 0.3s ease;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-position: center;
+  border-radius: 8px;
+}
+
+.book-cover:hover {
+  transform: scale(1.03);
+}
+
+.book-image-placeholder {
+  aspect-ratio: 3/4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+/* Smaller toggle on narrow screens */
+@media (max-width: 480px) {
+  #togglePwd, .input-with-icon .toggle-btn {
+    padding: 4px 6px;
+    font-size: 0.8rem;
+    right: 6px;
+  }
+  .input-with-icon input {
+    padding-right: 40px; /* reduce right padding on small screens */
+  }
+}
+
+/* Button centering helper: ensure text vertically centered inside buttons that may be custom-sized */
+.btn-center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+}
+
+.btn-primary, .btn-success {
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+}
+
+.small-link {
+  font-size: 0.9rem;
+}
+
+@keyframes fadeUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* subtle focus animation for the card */
+.auth-card:focus-within {
+  transform: translateY(-2px);
+}
+
+/* Carousel arrows customization for homepage popular carousel */
+.carousel-control-prev, .carousel-control-next {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+}
+.carousel-control-prev i, .carousel-control-next i {
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+/* hide default bootstrap gradient icon backgrounds so our icon is visible */
+.carousel-control-prev-icon, .carousel-control-next-icon {
+  background: transparent !important;
+  width: 100%;
+  height: 100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Show arrows only on md and up to avoid clutter on small screens */
+@media (max-width: 767px) {
+  .carousel-control-prev, .carousel-control-next { display: none; }
+}
+
+/* Book image helpers: ensure full image visible without cropping */
+.book-img {
+  width: 100%;
+  height: 300px;
+  object-fit: contain; /* show whole image inside box */
+  background-color: #fff; /* white background behind images */
+}
+
+.book-image-placeholder {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+  color: #6b7280; /* muted text color */
+  border: 1px solid #e5e7eb; /* light border to separate from card */
+}
+
+/* Navbar logo (left of brand text) */
+.navbar-brand .navbar-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+/* Auth pages: use a framed box and show uploaded logo inside */
+.auth-brand .logo {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-right: 12px;
+  display: inline-block;
+  background: none; /* override gradient used previously */
+}
+.auth-brand .auth-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+

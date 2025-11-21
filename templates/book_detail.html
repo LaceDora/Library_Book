@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{#
+  templates/book_detail.html
+
+  Hiển thị chi tiết một cuốn sách: ảnh, tên, tác giả, lượt xem và số lượng hiện có.
+  Button mượn sử dụng class `borrow-btn` và data attribute `data-book-id` để JS xử lý AJAX.
+#}
+{% block content %}
+
+<div class="container mt-4">
+  <div class="row g-4 align-items-start">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 overflow-hidden">
+        {% if book.image_url %}
+        <a href="{{ url_for('book_bp.detail', book_id=book.id) }}" class="book-cover-link">
+          <img src="{{ book.image_url }}" class="card-img-top book-cover" alt="{{ book.title }}" style="object-fit: cover; width: 100%; height: auto; max-height: 600px;">
+        </a>
+        {% else %}
+        <a href="{{ url_for('book_bp.detail', book_id=book.id) }}" class="book-cover-link">
+          <div class="book-image-placeholder p-5 text-center bg-light">Không có ảnh</div>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-md-8">
+  <h2 class="fw-bold mb-2"><a href="{{ url_for('book_bp.detail', book_id=book.id) }}" class="text-decoration-none text-dark">{{ book.title }}</a></h2>
+      <p class="text-muted mb-2"><strong>Tác giả:</strong> {{ book.author }}</p>
+
+  <p class="mb-1"><strong>Lượt xem:</strong> {{ book.views_count or 0 }}</p>
+  <p class="mb-3"><strong>Số lượng có sẵn:</strong> <span id="book-qty-{{ book.id }}">{{ book.available_quantity or 0 }}</span></p>
+
+      <div class="mb-4">
+        {% if session.get('user_id') %}
+          {% if book.available_quantity and book.available_quantity > 0 %}
+            <button data-book-id="{{ book.id }}" class="btn btn-primary btn-medium borrow-btn">Mượn sách</button>
+          {% else %}
+            <button class="btn btn-secondary btn-lg" disabled>Hết sách</button>
+          {% endif %}
+        {% else %}
+          <a href="{{ url_for('auth_bp.login') }}" class="btn btn-outline-primary btn-medium">Đăng nhập để mượn</a>
+        {% endif %}
+      </div>
+
+      <h4 class="mt-4">Mô tả</h4>
+      <div class="text-muted">
+        {% if book.description %}
+          {{ book.description }}
+        {% else %}
+          <p class="text-muted">Chưa có mô tả.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <a href="{{ prev_url }}" class="btn btn-link">Quay lại</a>
+  </div>
+
+  <!-- Sách liên quan -->
+  {% if related_books %}
+  <div class="mt-5">
+    <h4 class="mb-4">Có thể bạn cũng thích:</h4>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+      {% for related in related_books %}
+      <div class="col">
+        <div class="card h-100 shadow-sm border-0">
+          <div class="p-2">
+            {% if related.image_url %}
+            <a href="{{ url_for('book_bp.detail', book_id=related.id) }}" class="text-decoration-none">
+              <div class="position-relative" style="height: 280px; background-color: #f8f9fa; border-radius: 8px; overflow: hidden;">
+                <img src="{{ related.image_url }}" class="w-100 h-100" alt="{{ related.title }}" 
+                     style="object-fit: contain; transition: transform 0.3s ease;">
+              </div>
+            </a>
+            {% else %}
+            <div class="bg-light text-center py-5 rounded">Không có ảnh</div>
+            {% endif %}
+          </div>
+          <div class="card-body pt-2">
+            <h5 class="card-title" style="font-size: 1rem; line-height: 1.4;">
+              <a href="{{ url_for('book_bp.detail', book_id=related.id) }}" class="text-decoration-none text-dark">
+                {{ related.title }}
+              </a>
+            </h5>
+            <p class="card-text text-muted small mb-1">{{ related.author }}</p>
+            <p class="card-text"><small class="text-muted">Số lượng: <span id="book-qty-{{ related.id }}">{{ related.quantity }}</span></small></p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

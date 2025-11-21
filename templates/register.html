@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{#
+  templates/register.html
+
+  Form đăng ký tài khoản. Trường bắt buộc: username, password, password_confirm, student_staff_id.
+  Lưu ý: đăng nhập sau này bằng MSSV/MSCB (student_staff_id), không phải username.
+#}
+{% block content %}
+
+<style>
+.input-with-icon {
+  position: relative;
+}
+.input-with-icon .icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+  z-index: 2;
+}
+.input-with-icon .password-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.375rem 0.75rem;
+  color: #6c757d;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.input-with-icon .form-control {
+  padding-left: 2.5rem;
+  padding-right: 2.5rem;
+}
+/* Logo box in auth pages */
+.auth-brand .logo {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-right: 12px;
+  display: inline-block;
+}
+.auth-brand .auth-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+</style>
+
+<script>
+function togglePassword(inputId, button) {
+    var input = document.getElementById(inputId);
+    var icon = button.querySelector('i');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye-fill');
+        icon.classList.add('bi-eye-slash-fill');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash-fill');
+        icon.classList.add('bi-eye-fill');
+    }
+}
+</script>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand d-flex align-items-center">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='uploads/logo.jpg') }}" alt="Logo" class="auth-logo">
+      </div>
+      <div>
+        <div class="text-success fw-bold">Thư viện</div>
+        <div class="small text-muted">Tạo tài khoản mới</div>
+      </div>
+    </div>
+
+    <h3 class="mb-3">Đăng ký tài khoản</h3>
+
+  <form method="POST" action="{{ url_for('auth_bp.register') }}" class="mb-3">
+      <div class="mb-3 input-with-icon">
+        <span class="icon"><i class="bi bi-person-circle"></i></span>
+        <input type="text" name="username" id="username" class="form-control" placeholder="Họ và Tên" required>
+      </div>
+
+      <div class="mb-3 input-with-icon">
+        <span class="icon"><i class="bi bi-lock-fill"></i></span>
+        <input type="password" name="password" id="password" class="form-control" placeholder="Mật khẩu" required>
+        <button type="button" class="btn btn-link password-toggle" onclick="togglePassword('password', this)" aria-label="Toggle password visibility">
+          <i class="bi bi-eye-fill"></i>
+        </button>
+      </div>
+
+      <div class="mb-3 input-with-icon">
+        <span class="icon"><i class="bi bi-lock-fill"></i></span>
+        <input type="password" name="password_confirm" id="password_confirm" class="form-control" placeholder="Xác nhận mật khẩu" required>
+        <button type="button" class="btn btn-link password-toggle" onclick="togglePassword('password_confirm', this)" aria-label="Toggle password visibility">
+          <i class="bi bi-eye-fill"></i>
+        </button>
+      </div>
+
+      <div class="mb-3 input-with-icon">
+        <span class="icon"><i class="bi bi-person-badge"></i></span>
+        <input type="text" name="student_staff_id" id="student_staff_id" class="form-control" placeholder="MSSV/MSCB" required>
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="role" id="role_student" value="student" checked>
+          <label class="form-check-label" for="role_student">Sinh viên</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="role" id="role_lecturer" value="lecturer">
+          <label class="form-check-label" for="role_lecturer">Giảng viên</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="role" id="role_staff" value="staff">
+          <label class="form-check-label" for="role_staff">Cán bộ</label>
+        </div>
+      </div>
+
+      <div class="mb-2 small text-muted" id="pw-requirements">Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ, số và kí tự đặc biệt.</div>
+      <div class="mb-3 text-danger small" id="pw-error" style="display:none;"></div>
+
+      <button type="submit" class="btn btn-success w-100">Đăng ký</button>
+    </form>
+
+    <div class="d-flex justify-content-between small-link">
+  <a href="{{ url_for('auth_bp.login') }}">Đã có tài khoản? Đăng nhập</a>
+      <span></span>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+  <script>
+  // Client-side password validation before submit
+  document.addEventListener('DOMContentLoaded', function(){
+    var form = document.querySelector('form[action="{{ url_for('auth_bp.register') }}"]');
+    if (!form) return;
+
+    function validatePassword(pw){
+      // At least 6 chars, at least one letter, one number, one special char
+      var re = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$/;
+      return re.test(pw);
+    }
+
+    form.addEventListener('submit', function(e){
+      var pw = document.getElementById('password').value || '';
+      var pwConfirm = document.getElementById('password_confirm').value || '';
+      var errEl = document.getElementById('pw-error');
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+
+      if (pw !== pwConfirm){
+        e.preventDefault();
+        errEl.textContent = 'Mật khẩu và xác nhận mật khẩu không khớp.';
+        errEl.style.display = 'block';
+        return false;
+      }
+
+      if (!validatePassword(pw)){
+        e.preventDefault();
+        errEl.textContent = 'Mật khẩu không hợp lệ. Yêu cầu: ít nhất 6 ký tự, có chữ, số và ký tự đặc biệt.';
+        errEl.style.display = 'block';
+        return false;
+      }
+
+      return true;
+    });
+  });
+  </script>
