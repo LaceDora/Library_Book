@@ -34,17 +34,24 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB max
 # File upload config
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# MySQL config
-MYSQL_HOST = os.getenv('MYSQLHOST') or os.getenv('MYSQL_HOST') or 'localhost'
-MYSQL_USER = os.getenv('MYSQLUSER') or os.getenv('MYSQL_USER') or 'root'
-MYSQL_PASSWORD = os.getenv('MYSQLPASSWORD') or os.getenv('MYSQL_PASSWORD') or ''
-MYSQL_DB = os.getenv('MYSQLDATABASE') or os.getenv('MYSQL_DATABASE') or 'library_db'
-MYSQL_PORT = os.getenv('MYSQLPORT') or os.getenv('MYSQL_PORT') or '3306'
+# Prefer a generic DATABASE_URL (Postgres) when provided (e.g., ElephantSQL or Render)
+DATABASE_URL = os.getenv('DATABASE_URL') or os.getenv('DATABASE_URI')
+if DATABASE_URL:
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+else:
+    # MySQL config (fallback for PlanetScale / Railway style env vars)
+    MYSQL_HOST = os.getenv('MYSQLHOST') or os.getenv('MYSQL_HOST') or 'localhost'
+    MYSQL_USER = os.getenv('MYSQLUSER') or os.getenv('MYSQL_USER') or 'root'
+    MYSQL_PASSWORD = os.getenv('MYSQLPASSWORD') or os.getenv('MYSQL_PASSWORD') or ''
+    MYSQL_DB = os.getenv('MYSQLDATABASE') or os.getenv('MYSQL_DATABASE') or 'library_db'
+    MYSQL_PORT = os.getenv('MYSQLPORT') or os.getenv('MYSQL_PORT') or '3306'
 
-# SQLAlchemy connection string (use pymysql driver)
-app.config["SQLALCHEMY_DATABASE_URI"] = (
-    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
-)
+    # SQLAlchemy connection string (use pymysql driver)
+    app.config["SQLALCHEMY_DATABASE_URI"] = (
+        f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
+    )
+
+# SQLAlchemy common config
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
