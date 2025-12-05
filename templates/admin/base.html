@@ -10,6 +10,7 @@
 
   Ghi chú: có nhiều style inline để tuỳ chỉnh sidebar và layout; có thể tách ra file CSS riêng khi mở rộng.
 -->
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -40,6 +41,15 @@
     .navbar-brand {
       padding-top: .05px;
       padding-bottom: .05px;
+      display: flex;
+      align-items: center;
+    }
+
+    .navbar-brand img {
+      width: 40px;
+      height: 40px;
+      margin-right: 10px;
+      border-radius: 5px;
     }
 
     .navbar {
@@ -61,22 +71,25 @@
     }
 
     .nav-link.active {
-      background-color: #0d6efd;
-      color: white;
+      background-color: #e9ecef !important;
+      color: #0d6efd !important;
+      font-weight: bold !important;
     }
 
     .nav-link i {
       margin-right: 0.5rem;
     }
 
-    /* Top navbar links: không đổi background khi hover, chỉ đổi màu chữ sang trắng */
+    /* Top navbar links: màu trắng */
     .navbar .nav-link {
       background-color: transparent;
       transition: color .15s ease;
+      color: white !important;
     }
+
     .navbar .nav-link:hover {
       background-color: transparent !important;
-      color: #fff !important;
+      color: #f0f0f0 !important;
       text-decoration: none;
     }
 
@@ -103,7 +116,10 @@
   <!-- Top navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
     <div class="container-fluid">
-  <a class="navbar-brand" href="{{ url_for('admin_bp.dashboard') }}">Quản trị Thư viện</a>
+      <a class="navbar-brand" href="{{ url_for('admin_bp.dashboard') }}">
+        <img src="{{ url_for('static', filename='uploads/logo.jpg') }}" alt="Logo">
+        Quản trị Thư viện
+      </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -129,20 +145,20 @@
     <div class="sidebar-sticky pt-3">
       <ul class="nav flex-column">
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}" 
-             href="{{ url_for('admin_bp.dashboard') }}">
+          <a class="nav-link {% if request.endpoint == 'admin_bp.dashboard' %}active{% endif %}"
+            href="{{ url_for('admin_bp.dashboard') }}">
             <i class="bi bi-speedometer2"></i> Tổng quan
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'admin_books' %}active{% endif %}"
-             href="{{ url_for('admin_bp.books') }}">
+          <a class="nav-link {% if request.endpoint == 'admin_bp.books' %}active{% endif %}"
+            href="{{ url_for('admin_bp.books') }}">
             <i class="bi bi-book"></i> Quản lý sách
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}"
-             href="{{ url_for('admin_bp.users') }}">
+          <a class="nav-link {% if request.endpoint == 'admin_bp.users' %}active{% endif %}"
+            href="{{ url_for('admin_bp.users') }}">
             <i class="bi bi-people"></i> Quản lý người dùng
           </a>
         </li>
@@ -154,20 +170,243 @@
   <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
     <div class="container-fluid py-4">
       {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-          {% endfor %}
-        {% endif %}
+      {% if messages %}
+      {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+      {% endif %}
       {% endwith %}
 
       {% block content %}{% endblock %}
+
+
     </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Notification Bell -->
+  <div class="notification-container">
+    <button class="notification-btn" id="notificationBtn">
+      <i class="bi bi-bell-fill"></i>
+      <span class="badge bg-danger notification-badge" id="notificationBadge" style="display: none;">0</span>
+    </button>
+    <div class="notification-dropdown" id="notificationDropdown">
+      <div class="notification-header">
+        <span class="fw-bold">Thông báo</span>
+        <button class="btn btn-sm btn-link text-decoration-none" id="markAllReadBtn">Đã đọc tất cả</button>
+      </div>
+      <div class="notification-list" id="notificationList">
+        <!-- Notifications will be loaded here -->
+        <div class="text-center p-3 text-muted">Đang tải...</div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .notification-container {
+      position: fixed;
+      bottom: 20px;
+      right: 25px;
+      z-index: 1001;
+    }
+
+    .notification-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #fff;
+      border: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+    }
+
+    .notification-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .notification-btn i {
+      font-size: 1.5rem;
+      color: #0d6efd;
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      border-radius: 50%;
+      padding: 0.35em 0.5em;
+      font-size: 0.75rem;
+    }
+
+    .notification-dropdown {
+      position: absolute;
+      bottom: 60px;
+      right: 0;
+      width: 320px;
+      max-height: 400px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .notification-dropdown.show {
+      display: flex;
+    }
+
+    .notification-header {
+      padding: 10px 15px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8f9fa;
+    }
+
+    .notification-list {
+      overflow-y: auto;
+      max-height: 350px;
+    }
+
+    .notification-item {
+      padding: 10px 15px;
+      border-bottom: 1px solid #f1f1f1;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: block;
+      text-decoration: none;
+      color: #333;
+    }
+
+    .notification-item:hover {
+      background: #f8f9fa;
+    }
+
+    .notification-item.unread {
+      background: #e7f1ff;
+    }
+
+    .notification-item .time {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 4px;
+    }
+  </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const notifBtn = document.getElementById('notificationBtn');
+      const notifDropdown = document.getElementById('notificationDropdown');
+      const notifBadge = document.getElementById('notificationBadge');
+      const notifList = document.getElementById('notificationList');
+      const markAllReadBtn = document.getElementById('markAllReadBtn');
+
+      if (!notifBtn) return;
+
+      // Toggle dropdown
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        notifDropdown.classList.toggle('show');
+        if (notifDropdown.classList.contains('show')) {
+          fetchNotifications();
+        }
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function (e) {
+        if (!notifDropdown.contains(e.target) && !notifBtn.contains(e.target)) {
+          notifDropdown.classList.remove('show');
+        }
+      });
+
+      // Mark all read
+      markAllReadBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        fetch('/notification/notifications/mark-all-read', { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              fetchNotifications();
+              updateBadge(0);
+            }
+          });
+      });
+
+      function updateBadge(count) {
+        if (count > 0) {
+          notifBadge.textContent = count > 99 ? '99+' : count;
+          notifBadge.style.display = 'block';
+        } else {
+          notifBadge.style.display = 'none';
+        }
+      }
+
+      function fetchNotifications() {
+        fetch('/notification/notifications')
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              updateBadge(data.unread_count);
+              renderNotifications(data.notifications);
+            }
+          })
+          .catch(err => console.error('Error fetching notifications:', err));
+      }
+
+      function renderNotifications(notifications) {
+        if (notifications.length === 0) {
+          notifList.innerHTML = '<div class="text-center p-3 text-muted">Không có thông báo nào.</div>';
+          return;
+        }
+
+        notifList.innerHTML = notifications.map(n => `
+          <div class="notification-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id}, '${n.link || '#'}')">
+            <div class="d-flex align-items-start">
+              <i class="bi ${getIconClass(n.type)} me-2 mt-1"></i>
+              <div>
+                <div>${n.message}</div>
+                <div class="time">${n.created_at}</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      window.markRead = function (id, link) {
+        fetch(`/notification/notifications/mark-read/${id}`, { method: 'POST' })
+          .then(() => {
+            if (link && link !== '#') {
+              window.location.href = link;
+            } else {
+              fetchNotifications();
+            }
+          });
+      };
+
+      function getIconClass(type) {
+        switch (type) {
+          case 'success': return 'bi-check-circle-fill text-success';
+          case 'error': return 'bi-x-circle-fill text-danger';
+          case 'warning': return 'bi-exclamation-circle-fill text-warning';
+          default: return 'bi-info-circle-fill text-primary';
+        }
+      }
+
+      // Initial fetch and poll every 30s
+      fetchNotifications();
+      setInterval(fetchNotifications, 30000);
+    });
+  </script>
 </body>
+
 </html>

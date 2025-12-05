@@ -1,12 +1,12 @@
 {% extends "admin/base.html" %}
 {#
-  templates/admin/borrows.html
+templates/admin/borrows.html
 
-  Trang quản trị hiển thị lịch sử mượn toàn hệ thống với filter theo user/book/status
-  Admin có thể đánh dấu trả sách hoặc xóa bản ghi lịch sử.
+Trang quản trị hiển thị lịch sử mượn toàn hệ thống với filter theo user/book/status
+Admin có thể đánh dấu trả sách hoặc xóa bản ghi lịch sử.
 #}
 {% block content %}
-<h2 class="mb-4">Lịch sử mượn sách</h2>
+<h2 class="mb-4">Thông tin mượn sách</h2>
 
 <div class="card shadow">
   <div class="card-body">
@@ -16,14 +16,14 @@
         <div class="input-group">
           <span class="input-group-text">Người dùng</span>
           <input type="text" name="user" class="form-control" placeholder="Tên người dùng..."
-                 value="{{ request.args.get('user', '') }}">
+            value="{{ request.args.get('user', '') }}">
         </div>
       </div>
       <div class="col-md-4">
         <div class="input-group">
           <span class="input-group-text">Sách</span>
           <input type="text" name="book" class="form-control" placeholder="Tên sách..."
-                 value="{{ request.args.get('book', '') }}">
+            value="{{ request.args.get('book', '') }}">
         </div>
       </div>
       <div class="col-md-4">
@@ -31,10 +31,13 @@
           <span class="input-group-text">Trạng thái</span>
           <select name="status" class="form-select">
             <option value="">Tất cả</option>
-            <option value="borrowing" {% if request.args.get('status') == 'borrowing' %}selected{% endif %}>
+            <option value="pending" {% if request.args.get('status')=='pending' %}selected{% endif %}>
+              Chờ duyệt
+            </option>
+            <option value="borrowing" {% if request.args.get('status')=='borrowing' %}selected{% endif %}>
               Đang mượn
             </option>
-            <option value="returned" {% if request.args.get('status') == 'returned' %}selected{% endif %}>
+            <option value="returned" {% if request.args.get('status')=='returned' %}selected{% endif %}>
               Đã trả
             </option>
           </select>
@@ -53,6 +56,7 @@
             <th>Người mượn</th>
             <th>Sách</th>
             <th>Ngày mượn</th>
+            <th>Hạn trả</th>
             <th>Ngày trả</th>
             <th>Trạng thái</th>
             <th>Hành động</th>
@@ -66,6 +70,13 @@
             <td>{{ borrow.book.title if borrow.book else borrow.book_title }}</td>
             <td>{{ borrow.borrow_date.strftime("%d/%m/%Y %H:%M") }}</td>
             <td>
+              {% if borrow.expected_return_date %}
+              {{ borrow.expected_return_date.strftime("%d/%m/%Y") }}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td>
               {% if borrow.return_date %}
               {{ borrow.return_date.strftime("%d/%m/%Y %H:%M") }}
               {% else %}
@@ -73,33 +84,78 @@
               {% endif %}
             </td>
             <td>
-              {% if borrow.return_date %}
-                <span class="badge bg-success">Đã trả</span>
+              {% if borrow.status == 'pending' %}
+              <span class="badge bg-warning text-dark">Chờ duyệt</span>
+              {% elif borrow.status == 'rejected' %}
+              <span class="badge bg-danger">Từ chối</span>
+              {% elif borrow.return_date %}
+              <span class="badge bg-success">Đã trả</span>
               {% elif borrow.return_requested %}
-                <span class="badge bg-info text-dark">Yêu cầu trả</span>
+              <span class="badge bg-info text-dark">Yêu cầu trả</span>
               {% else %}
-                <span class="badge bg-warning text-dark">Đang mượn</span>
+              <span class="badge bg-primary">Đang mượn</span>
               {% endif %}
             </td>
             <td>
-              <div class="btn-group">
-                {% if not borrow.return_date %}
-                <form method="POST" action="{{ url_for('admin_bp.return_book', borrow_id=borrow.id) }}"
-                      style="display: inline-block;"
-                      onsubmit="return confirm('Xác nhận đánh dấu sách này đã được trả?')">
-                  <button type="submit" class="btn btn-sm btn-success">
-                    <i class="bi bi-check-circle"></i> Đánh dấu đã trả
-                  </button>
-                </form>
-                {% endif %}
-                <form method="POST" action="{{ url_for('admin_bp.delete_borrow', borrow_id=borrow.id) }}"
-                      style="display: inline-block;"
-                      onsubmit="return confirm('Xác nhận xóa lịch sử mượn này?')">
-                  <button type="submit" class="btn btn-sm btn-danger ms-1">
-                    <i class="bi bi-trash"></i> Xóa
-                  </button>
-                </form>
+              {% if borrow.status == 'pending' %}
+              <!-- Pending: Show approve/reject buttons -->
+              <form method="POST" action="{{ url_for('admin_bp.approve_borrow', borrow_id=borrow.id) }}"
+                class="d-inline">
+                <button type="submit" class="btn btn-sm btn-success"
+                  onclick="return confirm('Duyệt yêu cầu mượn sách này?')">
+                  <i class="bi bi-check-circle"></i> Duyệt
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_bp.reject_borrow', borrow_id=borrow.id) }}"
+                class="d-inline">
+                <button type="submit" class="btn btn-sm btn-danger"
+                  onclick="return confirm('Từ chối yêu cầu mượn sách này?')">
+                  <i class="bi bi-x-circle"></i> Từ chối
+                </button>
+              </form>
+              {% elif borrow.status == 'approved' and not borrow.return_date %}
+              <!-- Approved & not returned: Show return button -->
+              <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                data-bs-target="#returnModal{{ borrow.id}}">
+                <i class="bi bi-check-circle"></i> Đánh dấu đã trả
+              </button>
+
+              <!-- Modal xác nhận trả sách -->
+              <div class="modal fade" id="returnModal{{ borrow.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <form method="POST" action="{{ url_for('admin_bp.return_book', borrow_id=borrow.id) }}">
+                      <div class="modal-header">
+                        <h5 class="modal-title">Xác nhận trả sách: {{ borrow.book.title if borrow.book else
+                          borrow.book_title }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <div class="mb-3">
+                          <label class="form-label">Tình trạng sách:</label>
+                          <select name="book_condition" class="form-select" required>
+                            <option value="good">Tốt</option>
+                            <option value="damaged">Hư hỏng nhẹ</option>
+                            <option value="lost">Mất sách</option>
+                          </select>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label">Ghi chú:</label>
+                          <textarea name="return_notes" class="form-control" rows="3"
+                            placeholder="Nhập ghi chú về tình trạng sách khi trả (nếu có)..."></textarea>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-success">Xác nhận trả sách</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               </div>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
             </td>
           </tr>
           {% else %}

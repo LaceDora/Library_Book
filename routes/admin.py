@@ -10,10 +10,11 @@ Ghi chú: tất cả route admin đều dùng decorator `@admin_required` để 
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from models import db, User, Book, Borrow, Audit
+from models import db, User, Book, Borrow, Audit, Notification
 from decorators import admin_required
-from config import CATEGORY_MAP
-from datetime import datetime
+from config import CATEGORY_MAP, LOAN_PERIOD_DAYS
+from datetime import datetime, timedelta
+from email_service import send_borrow_approved_email, send_borrow_rejected_email
 import re
 
 admin = Blueprint('admin_bp', __name__)
@@ -151,19 +152,53 @@ def borrows():
     book_filter = request.args.get('book', '')
     status = request.args.get('status', '')
     
-    query = Borrow.query.join(User).join(Book)
+    # Query with explicit joins and select all needed columns
+    query = db.session.query(Borrow, User, Book).join(User, Borrow.user_id == User.id).join(Book, Borrow.book_id == Book.id)
     
     if user_filter:
         query = query.filter(User.username.like(f'%{user_filter}%'))
     if book_filter:
         query = query.filter(Book.title.like(f'%{book_filter}%'))
-    if status == 'borrowing':
-        query = query.filter(Borrow.return_date == None)
+    if status == 'pending':
+        query = query.filter(Borrow.status == 'pending')
+    elif status == 'borrowing':
+        query = query.filter(Borrow.status == 'approved', Borrow.return_date == None)
     elif status == 'returned':
         query = query.filter(Borrow.return_date != None)
     
-    borrows = query.order_by(Borrow.borrow_date.desc()).paginate(page=page, per_page=10)
-    return render_template('admin/borrows.html', borrows=borrows)
+    pagination = query.order_by(Borrow.borrow_date.desc()).paginate(page=page, per_page=10)
+    
+    # Transform results to include user and book objects
+    borrows_with_relations = []
+    for borrow, user, book in pagination.items:
+        borrow.user = user
+        borrow.book = book
+        borrows_with_relations.append(borrow)
+    
+    # Create a new pagination object with transformed items
+    class BorrowPagination:
+        def __init__(self, items, page, pages, total, has_prev, has_next, prev_num, next_num):
+            self.items = items
+            self.page = page
+            self.pages = pages
+            self.total = total
+            self.has_prev = has_prev
+            self.has_next = has_next
+            self.prev_num = prev_num
+            self.next_num = next_num
+    
+    borrows = BorrowPagination(
+        items=borrows_with_relations,
+        page=pagination.page,
+        pages=pagination.pages,
+        total=pagination.total,
+        has_prev=pagination.has_prev,
+        has_next=pagination.has_next,
+        prev_num=pagination.prev_num,
+        next_num=pagination.next_num
+    )
+    
+    return render_template('admin/borrows.html', borrows=borrows, timedelta=timedelta)
 
 @admin.route('/books/add', methods=['GET', 'POST'])
 @admin_required
@@ -340,3 +375,122 @@ def update_student_id(user_id):
     
     flash(f'Đã cập nhật MSSV/MSCB cho người dùng {user.username}!', 'success')
     return redirect(url_for('admin_bp.users'))
+
+@admin.route('/borrows/approve/<int:borrow_id>', methods=['POST'])
+@admin_required
+def approve_borrow(borrow_id):
+    """Admin duyệt yêu cầu mượn sách"""
+    borrow = Borrow.query.get_or_404(borrow_id)
+    
+    if borrow.status != 'pending':
+        flash('Yêu cầu này đã được xử lý trước đó.', 'warning')
+        return redirect(url_for('admin_bp.borrows'))
+    
+    book = Book.query.get(borrow.book_id)
+    if not book:
+        flash('Không tìm thấy sách.', 'danger')
+        return redirect(url_for('admin_bp.borrows'))
+    
+    if book.available_quantity <= 0:
+        flash('Sách đã hết, không thể duyệt yêu cầu này.', 'danger')
+        return redirect(url_for('admin_bp.borrows'))
+    
+    # Approve the borrow request
+    borrow.status = 'approved'
+    borrow.approved_by = session.get('user_id')
+    borrow.approved_at = datetime.now()
+    book.available_quantity -= 1
+    
+    # Add audit log
+    audit = Audit(
+        action='approve_borrow',
+        actor_user_id=session.get('user_id'),
+        target_borrow_id=borrow.id,
+        target_book_id=borrow.book_id,
+        details=f'Admin {session.get("user_id")} duyệt yêu cầu mượn sách ID {borrow.id}'
+    )
+    db.session.add(audit)
+    db.session.commit()
+    
+    # Send approval email to user
+    try:
+        user = User.query.get(borrow.user_id)
+        if user:
+            # Create notification
+            notification = Notification(
+                user_id=user.id,
+                message=f"Yêu cầu mượn sách '{book.title}' của bạn đã được duyệt!",
+                link=url_for('user_bp.borrows'),
+                type='success'
+            )
+            db.session.add(notification)
+            db.session.commit()
+
+            if user.email:
+                # Use stored expected_return_date
+                return_deadline = borrow.expected_return_date if borrow.expected_return_date else (borrow.borrow_date + timedelta(days=LOAN_PERIOD_DAYS))
+                send_borrow_approved_email(
+                    user.email, 
+                    user.username, 
+                    book.title, 
+                    book.author, 
+                    borrow.borrow_date, 
+                    return_deadline
+                )
+    except Exception as e:
+        print(f"Lỗi gửi email/notification duyệt: {e}")
+    
+    flash('Đã duyệt yêu cầu mượn sách thành công!', 'success')
+    return redirect(url_for('admin_bp.borrows'))
+
+@admin.route('/borrows/reject/<int:borrow_id>', methods=['POST'])
+@admin_required
+def reject_borrow(borrow_id):
+    """Admin từ chối yêu cầu mượn sách"""
+    borrow = Borrow.query.get_or_404(borrow_id)
+    
+    if borrow.status != 'pending':
+        flash('Yêu cầu này đã được xử lý trước đó.', 'warning')
+        return redirect(url_for('admin_bp.borrows'))
+    
+    # Reject the borrow request
+    borrow.status = 'rejected'
+    
+    # Add audit log
+    audit = Audit(
+        action='reject_borrow',
+        actor_user_id=session.get('user_id'),
+        target_borrow_id=borrow.id,
+        target_book_id=borrow.book_id,
+        details=f'Admin {session.get("user_id")} từ chối yêu cầu mượn sách ID {borrow.id}'
+    )
+    db.session.add(audit)
+    db.session.commit()
+    
+    # Send rejection email to user
+    try:
+        user = User.query.get(borrow.user_id)
+        book = Book.query.get(borrow.book_id)
+        if user and book:
+            # Create notification
+            notification = Notification(
+                user_id=user.id,
+                message=f"Yêu cầu mượn sách '{book.title}' của bạn đã bị từ chối.",
+                link=url_for('user_bp.borrows'),
+                type='error'
+            )
+            db.session.add(notification)
+            db.session.commit()
+
+            if user.email:
+                send_borrow_rejected_email(
+                    user.email, 
+                    user.username, 
+                    book.title, 
+                    book.author
+                )
+    except Exception as e:
+        print(f"Lỗi gửi email/notification từ chối: {e}")
+    
+    flash('Đã từ chối yêu cầu mượn sách.', 'info')
+    return redirect(url_for('admin_bp.borrows'))

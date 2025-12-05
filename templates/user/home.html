@@ -1,0 +1,226 @@
+{% extends "user/base.html" %}
+{#
+templates/home.html
+
+Trang chủ hiển thị:
+- Thanh tìm kiếm, hero
+- Phần Popular (carousel)
+- Phần Latest (grid)
+
+Các nút mượn sử dụng class `borrow-btn` và hoạt động qua AJAX khi user đã đăng nhập.
+#}
+{% block content %}
+
+<div class="hero bg-white p-4 rounded shadow-sm mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="display-6 fw-bold">Chào mừng đến với Thư viện</h1>
+      <p class="lead text-muted">Khám phá, mượn và tiếp cận những đầu sách hay nhất. Tìm kiếm theo tựa, tác giả hoặc
+        duyệt các sách phổ biến.</p>
+    </div>
+    <div class="d-none d-md-block" style="max-width:320px">
+      <img
+        src="https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=600&auto=format&fit=crop&ixlib=rb-4.0.3&s=placeholder"
+        alt="books" class="img-fluid rounded">
+    </div>
+  </div>
+
+  <!-- Search bar -->
+  <form method="GET" action="{{ url_for('main_bp.books') }}" class="mt-3" autocomplete="off">
+    <div class="input-group position-relative">
+      <input id="search-input" type="text" name="search" class="form-control search-autocomplete"
+        placeholder="Tìm kiếm theo tiêu đề hoặc tác giả..." value="{{ request.args.get('search', '') }}">
+      <button class="btn btn-primary" type="submit">Tìm kiếm</button>
+      <a href="{{ url_for('main_bp.books') }}"
+        class="btn btn-outline-secondary d-flex align-items-center justify-content-center">Reset</a>
+      <div id="search-suggestions" class="list-group position-absolute w-100"
+        style="z-index:1050; top:100%; display:none;"></div>
+    </div>
+  </form>
+</div>
+
+<!-- Popular books -->
+<h3 class="fw-bold text-primary mb-3">Phổ Biến</h3>
+<div id="popularCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="4000" data-bs-pause="hover">
+  <div class="carousel-inner">
+    {# chunk popular into groups of 3 #}
+    {% set chunk_size = 3 %}
+    {% for i in range(0, popular|length, chunk_size) %}
+    <div class="carousel-item {% if i == 0 %}active{% endif %}">
+      <div class="d-flex justify-content-center gap-3">
+        {% for book in popular[i:i+chunk_size] %}
+        <div class="card h-100 shadow-sm border-0" style="max-width:360px;">
+          {% if book.image_url %}
+          <a href="{{ url_for('book_bp.detail', book_id=book.id) }}">
+            <img src="{{ book.image_url }}" class="card-img-top book-img" alt="{{ book.title }}">
+          </a>
+          {% else %}
+          <a href="{{ url_for('book_bp.detail', book_id=book.id) }}">
+            <div class="book-image-placeholder">Không có ảnh</div>
+          </a>
+          {% endif %}
+          <div class="card-body py-2 text-center">
+            <h6 class="card-title mb-1"><a href="{{ url_for('book_bp.detail', book_id=book.id) }}"
+                class="text-decoration-none text-dark">{{ book.title|truncate(40) }}</a></h6>
+            <p class="text-muted small mb-2">{{ book.author }}</p>
+            <div class="d-flex gap-1 justify-content-center flex-wrap">
+              {% if session.get('user_id') %}
+              {% if book.available_quantity > 0 %}
+              <button type="button"
+                class="btn btn-sm btn-success d-inline-flex align-items-center justify-content-center"
+                style="min-width: 65px;" data-bs-toggle="modal" data-bs-target="#borrowModal"
+                data-book-id="{{ book.id }}" data-book-title="{{ book.title }}">
+                Đăng ký mượn
+              </button>
+              {% else %}
+              <button class="btn btn-sm btn-secondary d-inline-flex align-items-center justify-content-center"
+                style="min-width: 65px;" disabled>Hết</button>
+              {% endif %}
+              {% else %}
+              <a href="{{ url_for('auth_bp.login') }}"
+                class="btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center"
+                style="min-width: 100px;">Đăng nhập</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="carousel-item active">
+      <div class="text-muted text-center py-5">Chưa có sách phổ biến.</div>
+    </div>
+    {% endfor %}
+  </div>
+  <button class="carousel-control-prev" type="button" data-bs-target="#popularCarousel" data-bs-slide="prev"
+    aria-label="Previous">
+    <span class="carousel-control-prev-icon" aria-hidden="true"><i class="bi bi-chevron-left"></i></span>
+    <span class="visually-hidden">Previous</span>
+  </button>
+  <button class="carousel-control-next" type="button" data-bs-target="#popularCarousel" data-bs-slide="next"
+    aria-label="Next">
+    <span class="carousel-control-next-icon" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
+    <span class="visually-hidden">Next</span>
+  </button>
+</div>
+<script>
+  // Ensure carousel auto-starts (Bootstrap 5 should handle data-bs-ride)
+  (function () {
+    var el = document.getElementById('popularCarousel');
+    if (el) {
+      var carousel = bootstrap.Carousel.getInstance(el) || new bootstrap.Carousel(el, { interval: 4000, pause: 'hover' });
+    }
+  })();
+</script>
+
+<!-- Latest additions -->
+<h3 class="fw-bold text-primary mt-4 mb-3">Sách Mới</h3>
+<div class="row">
+  {% for book in latest %}
+  <div class="col-md-4 col-sm-6 mb-4">
+    <div class="card h-100 shadow-sm border-0">
+      {% if book.image_url %}
+      <a href="{{ url_for('book_bp.detail', book_id=book.id) }}"><img src="{{ book.image_url }}"
+          class="card-img-top book-img" alt="{{ book.title }}"></a>
+      {% else %}
+      <a href="{{ url_for('book_bp.detail', book_id=book.id) }}">
+        <div class="book-image-placeholder">Không có ảnh</div>
+      </a>
+      {% endif %}
+      <div class="card-body py-2">
+        <h6 class="card-title mb-1"><a href="{{ url_for('book_bp.detail', book_id=book.id) }}"
+            class="text-decoration-none text-dark">{{ book.title|truncate(45) }}</a></h6>
+        <p class="text-muted small mb-0">{{ book.author }}</p>
+        <p class="text-muted small mb-0"><strong>Số lượng:</strong> <span id="book-qty-{{ book.id }}">{{
+            book.available_quantity }}</span></p>
+        <div class="mt-2 text-center">
+          {% if session.get('user_id') %}
+          {% if book.available_quantity > 0 %}
+          <button type="button"
+            class="btn btn-sm btn-success book-action-btn d-inline-flex align-items-center justify-content-center"
+            data-bs-toggle="modal" data-bs-target="#borrowModal" data-book-id="{{ book.id }}"
+            data-book-title="{{ book.title }}">
+            Đăng ký mượn
+          </button>
+          {% else %}
+          <button
+            class="btn btn-sm btn-secondary book-action-btn d-inline-flex align-items-center justify-content-center"
+            disabled>Hết hàng</button>
+          {% endif %}
+          {% else %}
+          <a href="{{ url_for('auth_bp.login') }}"
+            class="btn btn-sm btn-outline-primary book-login-btn d-inline-flex align-items-center justify-content-center">Đăng
+            nhập để mượn</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-muted">Chưa có sách mới.</div>
+  {% endfor %}
+</div>
+
+<!-- Generic Borrow Modal -->
+<div class="modal fade" id="borrowModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="borrowForm" method="POST" action="">
+        <div class="modal-header">
+          <h5 class="modal-title">Đăng ký mượn sách</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Tên sách:</label>
+            <p class="text-primary" id="modalBookTitle"></p>
+          </div>
+          <div class="mb-3">
+            <label for="borrowDate" class="form-label">Ngày mượn:</label>
+            <input type="date" class="form-control" id="borrowDate" name="borrow_date" required>
+          </div>
+          <div class="mb-3">
+            <label for="returnDate" class="form-label">Ngày trả dự kiến:</label>
+            <input type="date" class="form-control" id="returnDate" name="expected_return_date" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-success">Xác nhận mượn</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var borrowModal = document.getElementById('borrowModal');
+    borrowModal.addEventListener('show.bs.modal', function (event) {
+      var button = event.relatedTarget;
+      var bookId = button.getAttribute('data-book-id');
+      var bookTitle = button.getAttribute('data-book-title');
+
+      var modalTitle = borrowModal.querySelector('#modalBookTitle');
+      var borrowForm = borrowModal.querySelector('#borrowForm');
+
+      modalTitle.textContent = bookTitle;
+      borrowForm.action = "/book/borrow/" + bookId;
+
+      // Set default dates
+      var today = new Date();
+      var borrowDateInput = borrowModal.querySelector('#borrowDate');
+      var returnDateInput = borrowModal.querySelector('#returnDate');
+
+      borrowDateInput.valueAsDate = today;
+
+      // Default return date is 14 days from today
+      var returnDate = new Date();
+      returnDate.setDate(today.getDate() + 14);
+      returnDateInput.valueAsDate = returnDate;
+    });
+  });
+</script>
+
+{% endblock %}

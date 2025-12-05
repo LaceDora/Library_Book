@@ -1,9 +1,0 @@
-# Ignore local environment files
-.env
-
-# Bytecode
-__pycache__/
-*.py[cod]
-
-# VS Code
-.vscode/

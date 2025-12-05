@@ -1,0 +1,149 @@
+{% extends "user/base.html" %}
+
+{% block content %}
+<style>
+    .input-with-icon {
+        position: relative;
+    }
+
+    .input-with-icon .icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        z-index: 2;
+    }
+
+    .input-with-icon .form-control {
+        padding-left: 2.5rem;
+    }
+
+    .auth-brand .logo {
+        width: 64px;
+        height: 64px;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-right: 12px;
+        display: inline-block;
+    }
+
+    .auth-brand .auth-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .otp-input {
+        font-size: 2rem;
+        letter-spacing: 1rem;
+        text-align: center;
+        font-weight: bold;
+    }
+
+    .countdown {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+</style>
+
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-brand d-flex align-items-center">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='uploads/logo.jpg') }}" alt="Logo" class="auth-logo">
+            </div>
+            <div>
+                <div class="text-success fw-bold">Thư viện</div>
+                <div class="small text-muted">Xác thực email</div>
+            </div>
+        </div>
+
+        <h3 class="mb-3">Xác thực email</h3>
+        <p class="text-muted mb-4">
+            Chúng tôi đã gửi mã OTP gồm 6 chữ số đến email: <strong>{{ email }}</strong>
+        </p>
+
+        <form method="POST" action="{{ url_for('auth_bp.verify_email') }}" class="mb-3">
+            <input type="hidden" name="email" value="{{ email }}">
+
+            <div class="mb-3 input-with-icon">
+                <span class="icon"><i class="bi bi-shield-lock-fill"></i></span>
+                <input type="text" name="otp_code" id="otp_code" class="form-control otp-input" placeholder="000000"
+                    maxlength="6" pattern="[0-9]{6}" required autocomplete="off">
+            </div>
+
+            <button type="submit" class="btn btn-success w-100 mb-3">Xác thực</button>
+        </form>
+
+        <form method="POST" action="{{ url_for('auth_bp.resend_otp') }}" id="resendForm">
+            <input type="hidden" name="email" value="{{ email }}">
+            <div class="text-center">
+                <p class="small text-muted mb-2">Không nhận được mã?</p>
+                <button type="submit" class="btn btn-link" id="resendBtn">
+                    Gửi lại mã OTP
+                </button>
+                <div class="countdown" id="countdown" style="display: none;">
+                    Gửi lại sau <span id="timer">60</span>s
+                </div>
+            </div>
+        </form>
+
+        <div class="text-center mt-3">
+            <a href="{{ url_for('auth_bp.register') }}" class="small-link">Quay lại đăng ký</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-focus OTP input
+    document.getElementById('otp_code').focus();
+
+    // Format OTP input (numbers only)
+    document.getElementById('otp_code').addEventListener('input', function (e) {
+        this.value = this.value.replace(/[^0-9]/g, '');
+    });
+
+    // Resend OTP countdown
+    let countdown = 60;
+    let timer = null;
+
+    function startCountdown() {
+        const resendBtn = document.getElementById('resendBtn');
+        const countdownDiv = document.getElementById('countdown');
+        const timerSpan = document.getElementById('timer');
+
+        resendBtn.style.display = 'none';
+        countdownDiv.style.display = 'block';
+
+        timer = setInterval(function () {
+            countdown--;
+            timerSpan.textContent = countdown;
+
+            if (countdown <= 0) {
+                clearInterval(timer);
+                resendBtn.style.display = 'inline-block';
+                countdownDiv.style.display = 'none';
+                countdown = 60;
+            }
+        }, 1000);
+    }
+
+    // Start countdown on page load
+    window.addEventListener('DOMContentLoaded', function () {
+        startCountdown();
+    });
+
+    // Handle resend form submission
+    document.getElementById('resendForm').addEventListener('submit', function (e) {
+        if (countdown > 0 && countdown < 60) {
+            e.preventDefault();
+            return false;
+        }
+        startCountdown();
+    });
+</script>
+
+{% endblock %}

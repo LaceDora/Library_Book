@@ -2,58 +2,68 @@
 {% block content %}
 <div class="row">
   <div class="col-xl-3 col-md-6 mb-4">
-    <div class="card border-left-primary shadow h-100 py-2">
-      <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-              Tổng số sách</div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_books }}</div>
-          </div>
-          <div class="col-auto">
-            <i class="bi bi-book fa-2x text-gray-300"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-xl-3 col-md-6 mb-4">
-    <div class="card border-left-success shadow h-100 py-2">
-      <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-              Người dùng</div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_users }}</div>
-          </div>
-          <div class="col-auto">
-            <i class="bi bi-people fa-2x text-gray-300"></i>
+    <a href="{{ url_for('admin_bp.books') }}" style="text-decoration: none; color: inherit;">
+      <div class="card border-left-primary shadow h-100 py-2" style="cursor: pointer; transition: transform 0.2s;"
+        onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                Tổng số sách</div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_books }}</div>
+            </div>
+            <div class="col-auto">
+              <i class="bi bi-book fa-2x text-gray-300"></i>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </a>
   </div>
 
   <div class="col-xl-3 col-md-6 mb-4">
-    <div class="card border-left-info shadow h-100 py-2">
-      <div class="card-body">
-        <div class="row no-gutters align-items-center">
-          <div class="col mr-2">
-            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-              Sách đang mượn</div>
-            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ active_borrows }}</div>
-          </div>
-          <div class="col-auto">
-            <i class="bi bi-journal-check fa-2x text-gray-300"></i>
+    <a href="{{ url_for('admin_bp.users') }}" style="text-decoration: none; color: inherit;">
+      <div class="card border-left-success shadow h-100 py-2" style="cursor: pointer; transition: transform 0.2s;"
+        onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                Người dùng</div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_users }}</div>
+            </div>
+            <div class="col-auto">
+              <i class="bi bi-people fa-2x text-gray-300"></i>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </a>
   </div>
 
   <div class="col-xl-3 col-md-6 mb-4">
-    <div class="card border-left-warning shadow h-100 py-2">
+    <a href="{{ url_for('admin_bp.borrows') }}" style="text-decoration: none; color: inherit;">
+      <div class="card border-left-info shadow h-100 py-2" style="cursor: pointer; transition: transform 0.2s;"
+        onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                Sách đang mượn</div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800">{{ active_borrows }}</div>
+            </div>
+            <div class="col-auto">
+              <i class="bi bi-journal-check fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-xl-3 col-md-6 mb-4">
+    <div class="card border-left-warning shadow h-100 py-2" style="cursor: pointer; transition: transform 0.2s;"
+      onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
       <div class="card-body">
         <div class="row no-gutters align-items-center">
           <div class="col mr-2">
@@ -67,6 +77,7 @@
         </div>
       </div>
     </div>
+    </a>
   </div>
 </div>
 

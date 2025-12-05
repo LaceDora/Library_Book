@@ -19,7 +19,11 @@ from datetime import datetime
 from config import allowed_file, UPLOAD_FOLDER
 import os
 from werkzeug.utils import secure_filename
-from werkzeug.security import check_password_hash, generate_password_hash
+# Import custom password functions from auth.py
+from routes.auth import hash_password, verify_password
+from phone_service import create_phone_verification, verify_phone_otp, send_sms_otp
+from email_service import create_email_verification, send_verification_email
+from flask import jsonify
 
 user = Blueprint('user', __name__)
 
@@ -109,29 +113,70 @@ def profile():
                 flash('Mật khẩu mới và xác nhận mật khẩu không khớp.', 'danger')
                 return redirect(url_for('user_bp.profile'))
 
+            # Validate password strength with detailed messages
+            import re
+            if not new_password or len(new_password) < 6:
+                flash('Mật khẩu mới phải có ít nhất 6 ký tự.', 'danger')
+                return redirect(url_for('user_bp.profile'))
+            
+            missing = []
+            if not re.search(r'[A-Za-z]', new_password):
+                missing.append('chữ cái')
+            if not re.search(r'\d', new_password):
+                missing.append('chữ số')
+            if not re.search(r'[@$!%*#?&]', new_password):
+                missing.append('ký tự đặc biệt (@$!%*#?&)')
+            
+            if missing:
+                flash(f"Mật khẩu mới thiếu: {', '.join(missing)}", 'danger')
+                return redirect(url_for('user_bp.profile'))
+
             if not current_password:
                 flash('Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu.', 'danger')
                 return redirect(url_for('user_bp.profile'))
 
-            if not check_password_hash(user.password_hash, current_password):
+            if not verify_password(user.password_hash, current_password):
                 flash('Mật khẩu hiện tại không đúng.', 'danger')
                 return redirect(url_for('user_bp.profile'))
 
         try:
             # Cập nhật thông tin cơ bản
             user.username = new_username
-            user.email = new_email
-            user.phone = new_phone
+            
+            # Xử lý thay đổi email
+            email_changed = False
+            if new_email and new_email != user.email:
+                user.email = new_email
+                user.email_verified = False
+                email_changed = True
+            
+            # Nếu đổi số điện thoại, reset trạng thái đã xác thực
+            if user.phone != new_phone:
+                user.phone = new_phone
+                user.phone_verified = False
 
             # Cập nhật mật khẩu mới nếu có
             if new_password:
-                user.password_hash = generate_password_hash(new_password)
+                user.password_hash = hash_password(new_password)
 
             # Lưu vào database
             db.session.commit()
             
             # Cập nhật session
             session['username'] = user.username
+            
+            # Nếu đổi email, gửi OTP và chuyển hướng đến trang xác thực
+            if email_changed:
+                otp_code, success, message = create_email_verification(user.email)
+                if success:
+                    send_success, send_message = send_verification_email(user.email, otp_code)
+                    if send_success:
+                        flash('Cập nhật email thành công! Vui lòng kiểm tra email mới để xác thực.', 'success')
+                        return redirect(url_for('auth_bp.verify_email', email=user.email))
+                    else:
+                        flash(f'Cập nhật email nhưng không thể gửi mã xác thực: {send_message}', 'warning')
+                else:
+                    flash(f'Cập nhật email nhưng lỗi tạo mã xác thực: {message}', 'warning')
             
             flash('Cập nhật thông tin thành công!', 'success')
             return redirect(url_for('user_bp.profile'))
@@ -142,7 +187,54 @@ def profile():
             flash('Có lỗi xảy ra khi cập nhật thông tin. Vui lòng thử lại.', 'danger')
             return redirect(url_for('user_bp.profile'))
 
-    return render_template('profile.html', user=user)
+    return render_template('user/profile.html', user=user)
+
+@user.route('/verify-phone/send', methods=['POST'])
+def send_phone_otp():
+    """API gửi mã OTP xác thực số điện thoại."""
+    if not session.get('user_id'):
+        return jsonify({'success': False, 'message': 'Vui lòng đăng nhập.'}), 401
+        
+    user = User.query.get(session['user_id'])
+    if not user or not user.phone:
+        return jsonify({'success': False, 'message': 'Vui lòng cập nhật số điện thoại trước.'}), 400
+        
+    if user.phone_verified:
+        return jsonify({'success': False, 'message': 'Số điện thoại đã được xác thực.'}), 400
+        
+    otp_code, success, message = create_phone_verification(user.phone)
+    if success:
+        send_success, send_message = send_sms_otp(user.phone, otp_code)
+        if send_success:
+            return jsonify({'success': True, 'message': send_message})
+        else:
+            return jsonify({'success': False, 'message': send_message}), 500
+    else:
+        return jsonify({'success': False, 'message': message}), 400
+
+@user.route('/verify-phone/confirm', methods=['POST'])
+def confirm_phone_otp():
+    """API xác nhận mã OTP."""
+    if not session.get('user_id'):
+        return jsonify({'success': False, 'message': 'Vui lòng đăng nhập.'}), 401
+        
+    user = User.query.get(session['user_id'])
+    if not user or not user.phone:
+        return jsonify({'success': False, 'message': 'Vui lòng cập nhật số điện thoại trước.'}), 400
+        
+    data = request.get_json()
+    otp_code = data.get('otp_code')
+    
+    if not otp_code:
+        return jsonify({'success': False, 'message': 'Vui lòng nhập mã OTP.'}), 400
+        
+    success, message = verify_phone_otp(user.phone, otp_code)
+    if success:
+        user.phone_verified = True
+        db.session.commit()
+        return jsonify({'success': True, 'message': message})
+    else:
+        return jsonify({'success': False, 'message': message}), 400
 
 @user.route('/borrows')
 def borrows():
@@ -151,20 +243,18 @@ def borrows():
         return redirect(url_for("auth_bp.login"))
     user_id = session["user_id"]
     records = Borrow.query.filter_by(user_id=user_id).order_by(Borrow.borrow_date.desc()).all()
-    return render_template("borrows.html", records=records)
+    return render_template("user/borrows.html", records=records)
 
-@user.route('/users')
-@admin_required
-def list_users():
-    all_users = User.query.order_by(User.id.asc()).all()
-    return render_template('users.html', users=all_users)
-
-@user.route('/user_history/<int:user_id>')
-@admin_required
-def history(user_id):
-    user = User.query.get_or_404(user_id)
-    records = Borrow.query.filter_by(user_id=user_id).order_by(Borrow.borrow_date.desc()).all()
-    return render_template('user_history.html', user=user, records=records)
+# @user.route('/users')
+# def users_list():
+#     all_users = User.query.all()
+#     return render_template('users.html', users=all_users)
+# 
+# @user.route('/users/<int:user_id>')
+# def user_detail(user_id):
+#     user = User.query.get_or_404(user_id)
+#     records = Borrow.query.filter_by(user_id=user_id).all()
+#     return render_template('user_history.html', user=user, records=records)
 
 @user.route('/delete_user/<int:user_id>')
 @admin_required

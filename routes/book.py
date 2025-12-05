@@ -12,8 +12,10 @@ Lưu ý:
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
-from datetime import datetime
-from models import db, Book, Borrow, Audit
+from datetime import datetime, timedelta
+from models import db, Book, Borrow, Audit, User, Notification
+from email_service import send_borrow_confirmation_email
+from config import LOAN_PERIOD_DAYS
 
 book = Blueprint('book', __name__)
 
@@ -37,19 +39,113 @@ def detail(book_id):
     ).order_by(Book.views_count.desc()).limit(4).all()
 
     prev_url = request.referrer or url_for('main_bp.books')
-    return render_template('book_detail.html', book=book, prev_url=prev_url, related_books=related_books)
+    return render_template('user/book_detail.html', book=book, prev_url=prev_url, related_books=related_books)
 
-@book.route("/borrow/<int:book_id>")
+@book.route("/borrow/<int:book_id>", methods=['GET', 'POST'])
 def borrow(book_id):
     if not session.get("user_id"):
         flash("Hãy đăng nhập để mượn sách!", "warning")
         return redirect(url_for("auth_bp.login"))
+    
     book = Book.query.get_or_404(book_id)
+    
+    if request.method == 'POST':
+        # Get dates from form
+        borrow_date_str = request.form.get('borrow_date')
+        expected_return_date_str = request.form.get('expected_return_date')
+        
+        # Validate dates
+        if not borrow_date_str or not expected_return_date_str:
+            flash("Vui lòng chọn ngày mượn và ngày trả!", "danger")
+            return redirect(request.referrer or url_for('main_bp.books'))
+        
+        try:
+            borrow_date = datetime.strptime(borrow_date_str, '%Y-%m-%d')
+            expected_return_date = datetime.strptime(expected_return_date_str, '%Y-%m-%d')
+            
+            # Validate date logic
+            if borrow_date > expected_return_date:
+                flash("Ngày trả phải sau ngày mượn!", "danger")
+                return redirect(request.referrer or url_for('main_bp.books'))
+            
+            if borrow_date < datetime.now().replace(hour=0, minute=0, second=0, microsecond=0):
+                flash("Ngày mượn không thể là ngày trong quá khứ!", "danger")
+                return redirect(request.referrer or url_for('main_bp.books'))
+                
+        except ValueError:
+            flash("Định dạng ngày không hợp lệ!", "danger")
+            return redirect(request.referrer or url_for('main_bp.books'))
+        
+        if book.available_quantity > 0:
+            # Check for existing active borrow (pending or approved, not returned)
+            existing_borrow = Borrow.query.filter(
+                Borrow.user_id == session['user_id'],
+                Borrow.book_id == book.id,
+                Borrow.return_date == None,
+                Borrow.status != 'rejected'
+            ).first()
+
+            if existing_borrow:
+                if existing_borrow.status == 'pending':
+                    flash("Bạn đã có yêu cầu đang chờ duyệt cho cuốn sách này.", "warning")
+                else:
+                    flash("Bạn đang mượn cuốn sách này. Vui lòng trả sách trước khi mượn lại.", "warning")
+                return redirect(request.referrer or url_for('main_bp.books'))
+
+            borrow_record = Borrow(
+                user_id=session["user_id"], 
+                book_id=book.id, 
+                book_title=book.title, 
+                borrow_date=borrow_date,
+                expected_return_date=expected_return_date,
+                status='pending'  # Set as pending, admin will approve later
+            )
+            # DO NOT decrease available_quantity here - only when admin approves
+            db.session.add(borrow_record)
+            db.session.commit()
+            
+            # Gửi email xác nhận
+            try:
+                user = User.query.get(session["user_id"])
+                if user and user.email:
+                    send_borrow_confirmation_email(user.email, user.username, book.title, book.author, borrow_date, expected_return_date)
+                
+                # Create notification for all admins
+                admins = User.query.filter_by(is_admin=True).all()
+                for admin in admins:
+                    notification = Notification(
+                        user_id=admin.id,
+                        message=f"Người dùng {user.username} yêu cầu mượn sách: {book.title}",
+                        link=url_for('admin_bp.borrows', status='pending'),
+                        type='info'
+                    )
+                    db.session.add(notification)
+                db.session.commit()
+            except Exception as e:
+                print(f"Lỗi gửi email/notification: {e}")
+                
+            flash("Đã gửi yêu cầu mượn sách! Vui lòng chờ admin duyệt.", "success")
+        else:
+            flash("Sách đã hết!", "danger")
+            
+        return redirect(request.referrer or url_for('main_bp.books'))
+    
+    # GET method - old behavior for backward compatibility
     if book.available_quantity > 0:
-        borrow = Borrow(user_id=session["user_id"], book_id=book.id, book_title=book.title, borrow_date=datetime.now())
+        borrow_record = Borrow(user_id=session["user_id"], book_id=book.id, book_title=book.title, borrow_date=datetime.now())
         book.available_quantity -= 1
-        db.session.add(borrow)
+        db.session.add(borrow_record)
         db.session.commit()
+        
+        # Gửi email xác nhận
+        try:
+            user = User.query.get(session["user_id"])
+            if user and user.email:
+                deadline = datetime.now() + timedelta(days=LOAN_PERIOD_DAYS)
+                send_borrow_confirmation_email(user.email, user.username, book.title, book.author, borrow_record.borrow_date, deadline)
+        except Exception as e:
+            print(f"Lỗi gửi email xác nhận: {e}")
+            
         flash("Đã mượn sách thành công!", "success")
     else:
         flash("Sách đã hết!", "danger")
@@ -84,17 +180,19 @@ def borrow_ajax(book_id):
                 'new_quantity': 0
             }), 400
 
-        # Kiểm tra xem người dùng có đang mượn sách này không
-        existing_borrow = Borrow.query.filter_by(
-            user_id=session['user_id'],
-            book_id=book.id,
-            return_date=None
+        # Kiểm tra xem người dùng có đang mượn sách này không (pending hoặc approved)
+        existing_borrow = Borrow.query.filter(
+            Borrow.user_id == session['user_id'],
+            Borrow.book_id == book.id,
+            Borrow.return_date == None,
+            Borrow.status != 'rejected'
         ).first()
         
         if existing_borrow:
+            msg = 'Bạn đang mượn cuốn sách này.' if existing_borrow.status == 'approved' else 'Bạn đã có yêu cầu đang chờ duyệt cho cuốn sách này.'
             return jsonify({
                 'success': False, 
-                'message': 'Bạn đang mượn cuốn sách này. Vui lòng trả sách trước khi mượn lại.',
+                'message': msg,
                 'new_quantity': book.available_quantity,
                 'error_type': 'duplicate_borrow'
             }), 200
@@ -121,6 +219,27 @@ def borrow_ajax(book_id):
         )
         db.session.add(audit)
         db.session.commit()
+
+        # Gửi email xác nhận và tạo thông báo
+        try:
+            user = User.query.get(session["user_id"])
+            if user and user.email:
+                deadline = datetime.now() + timedelta(days=LOAN_PERIOD_DAYS)
+                send_borrow_confirmation_email(user.email, user.username, book.title, book.author, borrow.borrow_date, deadline)
+            
+            # Create notification for all admins
+            admins = User.query.filter_by(is_admin=True).all()
+            for admin in admins:
+                notification = Notification(
+                    user_id=admin.id,
+                    message=f"Người dùng {user.username} yêu cầu mượn sách: {book.title}",
+                    link=url_for('admin_bp.borrows', status='pending'),
+                    type='info'
+                )
+                db.session.add(notification)
+            db.session.commit()
+        except Exception as e:
+            print(f"Lỗi gửi email/notification: {e}")
 
         return jsonify({
             'success': True,

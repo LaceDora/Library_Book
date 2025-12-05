@@ -19,9 +19,7 @@
             <th>Ngày mượn</th>
             <th>Ngày trả</th>
             <th>Trạng thái</th>
-            {% if has_unreturned_books %}
-            <th>Hành động</th>
-            {% endif %}
+
           </tr>
         </thead>
         <tbody>
@@ -32,77 +30,41 @@
             <td>{{ borrow.borrow_date.strftime("%d/%m/%Y %H:%M") }}</td>
             <td>
               {% if borrow.return_date %}
-                {{ borrow.return_date.strftime("%d/%m/%Y %H:%M") }}
-                {% if borrow.return_condition %}
-                  <br>
-                  <small class="text-muted">
-                    Tình trạng: 
-                    {% if borrow.return_condition == 'good' %}
-                      <span class="text-success">Tốt</span>
-                    {% elif borrow.return_condition == 'damaged' %}
-                      <span class="text-warning">Hư hỏng nhẹ</span>
-                    {% elif borrow.return_condition == 'lost' %}
-                      <span class="text-danger">Mất sách</span>
-                    {% endif %}
-                  </small>
-                  {% if borrow.return_notes %}
-                    <br>
-                    <small class="text-muted">Ghi chú: {{ borrow.return_notes }}</small>
-                  {% endif %}
+              {{ borrow.return_date.strftime("%d/%m/%Y %H:%M") }}
+              {% if borrow.return_condition %}
+              <br>
+              <small class="text-muted">
+                Tình trạng:
+                {% if borrow.return_condition == 'good' %}
+                <span class="text-success">Tốt</span>
+                {% elif borrow.return_condition == 'damaged' %}
+                <span class="text-warning">Hư hỏng nhẹ</span>
+                {% elif borrow.return_condition == 'lost' %}
+                <span class="text-danger">Mất sách</span>
                 {% endif %}
+              </small>
+              {% if borrow.return_notes %}
+              <br>
+              <small class="text-muted">Ghi chú: {{ borrow.return_notes }}</small>
+              {% endif %}
+              {% endif %}
               {% else %}
-                —
+              —
               {% endif %}
             </td>
             <td>
               {% if borrow.return_date %}
-                <span class="badge bg-success">Đã trả</span>
+              <span class="badge bg-success">Đã trả</span>
+              {% elif borrow.return_requested %}
+              <span class="badge bg-info text-dark">Yêu cầu trả</span>
+              {% elif borrow.status == 'pending' %}
+              <span class="badge bg-warning text-dark">Chờ duyệt</span>
+              {% elif borrow.status == 'rejected' %}
+              <span class="badge bg-danger">Từ chối</span>
               {% else %}
-                <span class="badge bg-warning text-dark">Đang mượn</span>
+              <span class="badge bg-primary">Đang mượn</span>
               {% endif %}
             </td>
-            {% if has_unreturned_books and not borrow.return_date %}
-            <td>
-              <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#returnModal{{ borrow.id }}">
-                <i class="bi bi-check-circle"></i> Đánh dấu đã trả
-              </button>
-
-              <!-- Modal xác nhận trả sách -->
-              <div class="modal fade" id="returnModal{{ borrow.id }}" tabindex="-1">
-                <div class="modal-dialog">
-                  <div class="modal-content">
-                    <form method="POST" action="{{ url_for('admin_bp.return_book', borrow_id=borrow.id) }}">
-                      <div class="modal-header">
-                        <h5 class="modal-title">Xác nhận trả sách: {{ borrow.book.title if borrow.book else borrow.book_title }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                      </div>
-                      <div class="modal-body">
-                        <div class="mb-3">
-                          <label class="form-label">Tình trạng sách:</label>
-                          <select name="book_condition" class="form-select" required>
-                            <option value="good">Tốt</option>
-                            <option value="damaged">Hư hỏng nhẹ</option>
-                            <option value="lost">Mất sách</option>
-                          </select>
-                        </div>
-                        <div class="mb-3">
-                          <label class="form-label">Ghi chú:</label>
-                          <textarea name="return_notes" class="form-control" rows="3" 
-                                  placeholder="Nhập ghi chú về tình trạng sách khi trả (nếu có)..."></textarea>
-                        </div>
-                      </div>
-                      <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-                        <button type="submit" class="btn btn-success">Xác nhận trả sách</button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </td>
-            {% elif has_unreturned_books %}
-            <td></td>
-            {% endif %}
           </tr>
           {% endfor %}
         </tbody>

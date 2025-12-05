@@ -41,7 +41,7 @@ body {
 }
 
 footer {
-  margin-top: 60px;
+  margin-top: 30px;
   /* Ensure footer sits at bottom when page content is short */
   background: transparent;
 }
@@ -318,4 +318,38 @@ html, body {
   object-fit: cover;
   display: block;
 }
+
+/* ===== Overrides for login page (ensure requested visual styles) ===== */
+.auth-card .btn-auth-main {
+  background: #0d6efd !important;
+  color: #ffffff !important;
+  border-color: #0d6efd !important;
+  box-shadow: 0 4px 14px rgba(13,110,253,0.12) !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+}
+.auth-card .btn-auth-main:hover {
+  background: #0b5ed7 !important;
+  border-color: #0b5ed7 !important;
+}
+.auth-card .btn-google {
+  background: #ffffff !important;
+  border: 1px solid #cfcfcf !important;
+  color: #222 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03) !important;
+}
+.auth-card .btn-google:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+  background: #fafafa !important;
+}
+.oauth-separator { display:flex; align-items:center; gap:0.5rem }
+.oauth-separator:before, .oauth-separator:after { content:""; flex:1; height:1px; background:#e9ecef !important; display:block }
+.oauth-separator span { color:#6c757d !important; font-weight:600 !important; padding:0 .5rem }
+
+/* ensure buttons share same max width */
+.auth-card .btn { max-width: 380px !important; display: block !important; margin: 0 auto !important; }
+
+/* End overrides */
 

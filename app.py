@@ -14,6 +14,9 @@ Ghi chú nhanh trên các phần chính:
 from config import app
 from models import db
 from flask import request, flash, redirect, url_for
+from flask_apscheduler import APScheduler
+from datetime import datetime, timedelta
+from email_service import send_return_reminder_email
 from werkzeug.exceptions import RequestEntityTooLarge
 
 # Cấu hình giới hạn kích thước upload
@@ -25,6 +28,42 @@ def handle_file_too_large(e):
     flash('File tải lên quá lớn. Giới hạn là 2MB.', 'danger')
     return redirect(request.url)
 
+# Initialize Flask-Mail
+from email_service import mail
+mail.init_app(app)
+
+# Initialize APScheduler
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+
+def check_overdue_books():
+    """Kiểm tra và gửi email nhắc nhở cho các sách sắp đến hạn hoặc quá hạn."""
+    with app.app_context():
+        # Lấy ngày hiện tại
+        today = datetime.now()
+        # Lấy ngày mai (để nhắc trước 1 ngày)
+        tomorrow = today + timedelta(days=1)
+        
+        # Tìm các lượt mượn chưa trả
+        from models import Borrow, User, Book
+        
+        # 1. Nhắc trước 1 ngày
+        upcoming_returns = db.session.query(Borrow, User, Book).join(User).join(Book).filter(
+            Borrow.return_date >= tomorrow.replace(hour=0, minute=0, second=0),
+            Borrow.return_date < tomorrow.replace(hour=23, minute=59, second=59),
+            Borrow.return_date != None,
+            Borrow.return_condition == None  # Chưa trả
+        ).all()
+        
+        for borrow, user, book in upcoming_returns:
+            if user.email:
+                print(f"Sending reminder to {user.email} for book {book.title}")
+                send_return_reminder_email(user.email, user.username, book.title, borrow.return_date)
+
+# Lên lịch chạy mỗi ngày vào 8:00 sáng
+scheduler.add_job(id='check_overdue_books', func=check_overdue_books, trigger='cron', hour=8, minute=0)
+
 # Import blueprints
 from routes.main import main as main_blueprint
 from routes.auth import auth as auth_blueprint
@@ -32,6 +71,8 @@ from routes.book import book as book_blueprint
 from routes.user import user as user_blueprint
 from routes.admin import admin as admin_blueprint
 from routes.chatbot import chatbot as chatbot_blueprint
+from routes.google_oauth import google_bp as google_oauth_blueprint
+from routes.notification import notification_bp
 
 # Register blueprints with unique names and prefixes
 app.register_blueprint(main_blueprint, name='main_bp')
@@ -40,19 +81,26 @@ app.register_blueprint(book_blueprint, name='book_bp', url_prefix='/book')
 app.register_blueprint(user_blueprint, name='user_bp', url_prefix='/user')
 app.register_blueprint(admin_blueprint, name='admin_bp', url_prefix='/admin')
 app.register_blueprint(chatbot_blueprint, name='chatbot_bp')
+app.register_blueprint(google_oauth_blueprint, name='google_oauth_bp')
+app.register_blueprint(notification_bp, name='notification_bp', url_prefix='/notification')
 
 # Khởi tạo available_quantity từ quantity nếu chưa có
 with app.app_context():
-    from models import Book
-    books_need_update = Book.query.filter(
-        (Book.available_quantity.is_(None)) | (Book.available_quantity == 0)
-    ).all()
-    for book in books_need_update:
-        if book.available_quantity is None or book.available_quantity == 0:
-            book.available_quantity = book.quantity or 1
-    if books_need_update:
-        db.session.commit()
-        print(f"✓ Initialized available_quantity for {len(books_need_update)} books")
+    try:
+        from models import Book
+        from sqlalchemy.exc import ProgrammingError
+        
+        books_need_update = Book.query.filter(
+            (Book.available_quantity.is_(None)) | (Book.available_quantity == 0)
+        ).all()
+        for book in books_need_update:
+            if book.available_quantity is None or book.available_quantity == 0:
+                book.available_quantity = book.quantity or 1
+        if books_need_update:
+            db.session.commit()
+            print(f"✓ Initialized available_quantity for {len(books_need_update)} books")
+    except Exception as e:
+        print(f"⚠ Skipped available_quantity init (Tables might not exist yet): {e}")
 
 if __name__ == '__main__':
     import sys

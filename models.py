@@ -59,6 +59,10 @@ class User(db.Model):
     phone = db.Column(db.String(30), unique=True, nullable=True)
     # Trạng thái tài khoản: True = active (có thể đăng nhập), False = bị khoá
     is_active = db.Column(db.Boolean, default=True)
+    # Trạng thái xác thực email: True = đã xác thực, False = chưa xác thực
+    email_verified = db.Column(db.Boolean, default=False)
+    # Trạng thái xác thực sđt: True = đã xác thực, False = chưa xác thực
+    phone_verified = db.Column(db.Boolean, default=False)
 
 
 class Book(db.Model):
@@ -98,6 +102,11 @@ class Borrow(db.Model):
     # User-initiated return request: user clicks "Yêu cầu trả sách" -> admin will confirm
     return_requested = db.Column(db.Boolean, default=False)
     return_requested_at = db.Column(db.DateTime, nullable=True)
+    # Borrow approval system
+    status = db.Column(db.String(20), nullable=False, default='approved')  # pending, approved, rejected
+    approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    expected_return_date = db.Column(db.DateTime, nullable=True)
 
 
 class Audit(db.Model):
@@ -112,3 +121,80 @@ class Audit(db.Model):
     target_book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
     details = db.Column(db.Text)
+
+
+class EmailVerification(db.Model):
+    """Model EmailVerification: lưu trữ OTP code cho xác thực email khi đăng ký
+    
+    Fields:
+    - email: email cần xác thực
+    - otp_code: mã OTP 6 chữ số
+    - created_at: thời gian tạo
+    - expires_at: thời gian hết hạn (10 phút)
+    - verified: đã xác thực hay chưa
+    - attempts: số lần thử gửi lại OTP (rate limiting)
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    otp_code = db.Column(db.String(6), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    verified = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=1)
+
+
+class PhoneVerification(db.Model):
+    """Model PhoneVerification: lưu trữ OTP code cho xác thực số điện thoại
+    
+    Fields:
+    - phone: số điện thoại cần xác thực
+    - otp_code: mã OTP 6 chữ số
+    - created_at: thời gian tạo
+    - expires_at: thời gian hết hạn (5 phút)
+    - verified: đã xác thực hay chưa
+    - attempts: số lần thử gửi lại OTP
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    phone = db.Column(db.String(30), nullable=False, index=True)
+    otp_code = db.Column(db.String(6), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    verified = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=1)
+
+
+class PasswordReset(db.Model):
+    """Model PasswordReset: lưu trữ mã reset password
+    
+    Fields:
+    - user_id: ID của user yêu cầu reset
+    - reset_code: mã reset 6 chữ số
+    - created_at: thời gian tạo
+    - expires_at: thời gian hết hạn (15 phút)
+    - used: đã sử dụng hay chưa
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reset_code = db.Column(db.String(6), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+
+
+class Notification(db.Model):
+    """Model Notification: lưu thông báo cho user và admin
+    
+    Fields:
+    - user_id: người nhận thông báo
+    - message: nội dung thông báo
+    - link: đường dẫn liên kết (optional)
+    - is_read: trạng thái đã đọc
+    - type: loại thông báo (info, success, warning, error)
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    link = db.Column(db.String(255), nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    type = db.Column(db.String(20), default='info')

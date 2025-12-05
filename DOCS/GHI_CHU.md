@@ -1,183 +1,534 @@
-GHI CHÚ CHUNG DỰ ÁN - Thư viện Python
-===================================
+# GHI CHÚ DỰ ÁN - Thư viện Python Web App
 
-Tài liệu tóm tắt chức năng chính và ghi chú cho từng file trong workspace.
-Nội dung bằng tiếng Việt.
-
----
-
-1) app.py
------------
-Mục đích:
-- Khởi tạo runtime cho Flask app, cấu hình upload limit (2MB), xử lý lỗi RequestEntityTooLarge.
-- Khởi tạo DB (db.create_all()) và gọi `remove_username_unique_constraint()` để loại bỏ ràng buộc UNIQUE trên username nếu cần.
-- Đăng ký blueprints: main, auth, book, user, admin.
-- Trong __main__: tạo secret_key và SESSION_COOKIE_NAME tùy theo port để tránh xung đột session khi chạy nhiều instance.
-
-Gợi ý:
-- Kiểm tra `app.register_blueprint(..., name='...')` nếu gặp lỗi; thông thường chỉ cần `app.register_blueprint(bp, url_prefix=...)`.
-- Việc set secret_key mới mỗi lần khởi chạy thích hợp cho dev; production cần secret cố định (env var).
+> **Tài liệu đầy đủ về hệ thống quản lý thư viện**  
+> Cập nhật: 2025-12-05
 
 ---
 
-2) config.py
--------------
-Mục đích:
-- Tạo Flask app instance và cấu hình session, upload (UPLOAD_FOLDER, ALLOWED_EXTENSIONS, MAX_CONTENT_LENGTH).
-- Thiết lập SQLALCHEMY_DATABASE_URI (hiện dùng MySQL) và engine options.
-- CATEGORY_MAP: map slug -> tên hiển thị cho category.
-- Hàm helper `allowed_file(filename)` để kiểm tra extension.
+## 📌 MỤC LỤC
 
-Gợi ý:
-- Đặt DB URI, SECRET KEY, và các config nhạy cảm bằng biến môi trường.
-- Dùng Flask-Migrate để quản lý schema production.
+1. [Tổng quan hệ thống](#1-tổng-quan-hệ-thống)
+2. [Luồng hoạt động chính](#2-luồng-hoạt-động-chính)
+3. [Cấu trúc thư mục](#3-cấu-trúc-thư-mục)
+4. [Chi tiết các file chính](#4-chi-tiết-các-file-chính)
+5. [Database Models](#5-database-models)
+6. [Gợi ý cải tiến](#6-gợi-ý-cải-tiến)
 
 ---
 
-3) models.py
-------------
-Model chính:
-- User: id, username (không unique), password_hash, is_admin, student_staff_id (unique), role, avatar_url, email (unique), phone (unique).
-- Book: id, title, author, image_url, quantity, category, is_active, views_count.
-- Borrow: id, user_id, book_id, borrow_date, book_title (snapshot), return_date, return_condition, return_notes.
-- Audit: id, action, actor_user_id, target_borrow_id, target_book_id, timestamp, details.
+## 1. TỔNG QUAN HỆ THỐNG
 
-Hàm:
-- remove_username_unique_constraint(): cố gắng xóa ràng buộc unique của username (ALTER TABLE). Thao tác schema runtime, nên dùng migration.
+### Công nghệ sử dụng
+- **Backend**: Flask (Python 3.10)
+- **Database**: MySQL + SQLAlchemy ORM
+- **Frontend**: Bootstrap 5.3, Vanilla JavaScript
+- **AI**: Google Gemini API + ChromaDB (RAG)
+- **Email**: SMTP (Gmail)
 
-Gợi ý:
-- Kiểm tra behavior của các cột unique (email/phone) khi NULL trong MySQL.
-- Dùng migration tool cho thay đổi schema lớn.
+### Tính năng chính
+✅ **User Features:**
+- Đăng ký/Đăng nhập (MSSV/MSCB hoặc Email + Password)
+- Xác thực email (OTP)
+- Tìm kiếm & lọc sách theo danh mục
+- Đăng ký mượn sách (pending approval)
+- Xem lịch sử mượn & trạng thái
+- Chatbot AI hỗ trợ tìm sách
+- Nhận thông báo real-time
 
----
-
-4) decorators.py
------------------
-- admin_required: decorator kiểm tra session:
-  - Nếu không có `user_id` -> redirect tới login.
-  - Nếu không có `is_admin` -> redirect về trang chính.
-
-Gợi ý: có thể tách `login_required` chung và dùng `admin_required` chỉ bổ sung quyền admin.
-
----
-
-5) routes/main.py
-------------------
-- index(): Hiển thị trang chủ, lấy `popular` và `latest` (limit 8).
-- books(): Danh sách sách, hỗ trợ search (title hoặc author) và paginate (per_page=9).
-- category(slug): Lọc theo category; slug -> display name via CATEGORY_MAP.
-
-Gợi ý:
-- Nếu cần điều kiện OR phức tạp hơn, dùng `from sqlalchemy import or_`.
+✅ **Admin Features:**
+- Dashboard thống kê
+- Quản lý sách (CRUD)
+- Quản lý người dùng
+- Duyệt/Từ chối yêu cầu mượn sách
+- Xem lịch sử mượn theo user
+- Audit logs
+- Nhận thông báo về yêu cầu mới
 
 ---
 
-6) routes/auth.py
-------------------
-- login(): Đăng nhập bằng `student_staff_id` (form field name là `login`) và password; lưu session: user_id, is_admin, username, role.
-- logout(): Xóa session.
-- register(): Kiểm tra password confirm; kiểm tra trùng MSSV/MSCB; tạo user với password hash.
+## 2. LUỒNG HOẠT ĐỘNG CHÍNH
 
-Gợi ý:
-- Validate mật khẩu mạnh, email format (nếu dùng), xử lý lỗi DB với rollback.
+### 🔹 A. Quy trình User mượn sách
 
----
+```
+1. USER: Đăng ký tài khoản
+   ├─ Điền form (MSSV/MSCB, Email, Password)
+   ├─ Hệ thống gửi OTP qua email
+   └─ Xác thực email → Tài khoản active
 
-7) routes/book.py
-------------------
-- detail(book_id): Hiển thị chi tiết sách và tăng `views_count`.
-- borrow(book_id): Mượn sách theo cách thông thường (redirect), giảm quantity và tạo Borrow.
-- borrow_ajax(book_id): Xử lý mượn qua AJAX, trả JSON {success, message, new_quantity, ...}. Kiểm tra header 'X-Requested-With'.
-- return_book(borrow_id): Xử lý trả sách (user hoặc admin), cập nhật return_date và tăng quantity nếu phù hợp, tạo Audit.
+2. USER: Đăng nhập
+   ├─ Nhập MSSV/MSCB hoặc Email + Password
+   └─ Session được tạo
 
-Gợi ý:
-- Bọc thao tác giảm/increase quantity + tạo borrow trong transaction để tránh race condition.
-- borrow_ajax nên trả error mã phù hợp và JSON rõ ràng.
+3. USER: Tìm & xem sách
+   ├─ Trang chủ: Popular + Latest books
+   ├─ Tìm kiếm theo tên/tác giả
+   ├─ Lọc theo danh mục
+   └─ Xem chi tiết sách
 
----
+4. USER: Đăng ký mượn sách
+   ├─ Click "Đăng ký mượn"
+   ├─ Chọn ngày mượn + ngày trả dự kiến (modal)
+   ├─ Submit form
+   ├─ Status: PENDING (chờ admin duyệt)
+   ├─ Hệ thống GỬI THÔNG BÁO cho ALL ADMINS
+   └─ Email xác nhận "Yêu cầu đã được gửi"
 
-8) routes/user.py
-------------------
-- profile(): Xem/cập nhật profile, upload avatar (kiểm tra extension + kích thước), đổi mật khẩu (yêu cầu mật khẩu hiện tại).
-- borrows(): Danh sách lịch sử mượn của user hiện tại.
-- list_users()/history()/delete(user_id): Các hàm admin để quản lý user, xem lịch sử và xóa user (khi xóa sẽ phục hồi quantity nếu có borrows chưa trả).
+5. ADMIN: Nhận thông báo
+   ├─ Notification bell hiện số lượng yêu cầu mới
+   ├─ Click notification → redirect tới Manage Borrows (pending)
+   └─ Xem chi tiết yêu cầu
 
-Gợi ý:
-- Khi xóa user, đảm bảo ghi Audit và xử lý rollback nếu có lỗi.
-- Upload avatar: sanitize filename, lưu vào `static/uploads`.
+6. ADMIN: Duyệt yêu cầu
+   ├─ Click "Approve"
+   │  ├─ Giảm quantity sách
+   │  ├─ Status → APPROVED
+   │  ├─ GỬI EMAIL xác nhận cho user
+   │  └─ GỬI THÔNG BÁO cho user
+   ├─ Hoặc click "Reject"
+   │  ├─ Status → REJECTED
+   │  ├─ GỬI EMAIL từ chối cho user
+   │  └─ GỬI THÔNG BÁO cho user
+   └─ Tạo Audit Log
 
----
+7. USER: Nhận kết quả
+   ├─ Nhận notification bell
+   ├─ Click notification → xem lịch sử mượn
+   ├─ Nhận email
+   └─ Xem status: APPROVED/REJECTED trong "Lịch sử mượn"
 
-9) routes/admin.py
--------------------
-- dashboard(): Thống kê tổng quan (tổng sách, tổng user, borrows active, recent audit logs).
-- books(): Quản lý sách (search, paginate, per_page=10).
-- users(): Quản lý người dùng (search, paginate).
-- update_user_role(user_id): POST thay đổi role (không cho phép thay đổi chính mình hoặc admin).
-- borrows(): Danh sách borrow cho admin (filter user/book/status).
-- add_book(), edit_book(), delete_book(): CRUD sách cho admin.
-- delete_user(user_id): Xóa user (cùng lịch sử) — chỉ admin.
-- user_history(user_id): Xem lịch sử mượn 1 user.
-- return_book(borrow_id): Admin xác nhận trả sách, có thể kèm tình trạng (good/damaged/lost).
-
-Gợi ý:
-- Kiểm tra quyền kỹ, và log hành động admin vào Audit.
-
----
-
-10) Templates (tổng hợp)
--------------------------
-- `templates/base.html`: layout chính (navbar, flash, toast, chèn `static/js/main.js`).
-  - Meta `user-logged-in` được thêm nếu session có user_id.
-- `templates/admin/base.html`: layout admin (navbar + sidebar).
-- `templates/home.html`: hero + popular carousel + latest grid.
-- `templates/books.html`: danh sách/paging/search; nút mượn có class `borrow-btn` và id `book-qty-<id>` để JS cập nhật.
-- `templates/book_detail.html`: chi tiết sách, hiện số lượng và nút mượn.
-- `templates/login.html`, `templates/register.html`: auth forms.
-- `templates/profile.html`: upload avatar + đổi mật khẩu.
-- `templates/borrows.html`: lịch sử mượn user-facing.
-- `templates/admin/*`: admin views (books, borrows, users, add/edit forms, history).
-
-Gợi ý:
-- Các template có nhiều inline JS/CSS; cân nhắc tách ra file tĩnh để dễ bảo trì.
-- Xác nhận CSRF nếu dùng forms quan trọng (Flask-WTF) để tăng an toàn.
+8. USER: Trả sách (offline tại thư viện)
+   ├─ Admin xác nhận trả sách
+   ├─ Nhập tình trạng sách (good/damaged/lost)
+   ├─ Tăng quantity (nếu good)
+   └─ Cập nhật return_date
+```
 
 ---
 
-11) static/js/main.js
-----------------------
-- Lắng nghe event `.borrow-btn` để gửi POST tới `/book/borrow_ajax/<id>`.
-- Nếu không logged-in (meta user-logged-in không có), redirect tới login.
-- Cập nhật số lượng sách hiển thị và thay đổi trạng thái nút sau khi mượn.
-- showToast(type, title, message): helper tạo Bootstrap toast và xóa sau khi ẩn.
+### 🔹 B. Hệ thống Notification
 
-Gợi ý:
-- Nếu có CSRF token, thêm vào header.
-- Thay vì tạo container mới mỗi lần, có thể reuse một container global để tránh DOM clutter.
+```
+┌─────────────────────────────────────────────────┐
+│         NOTIFICATION TRIGGERS                    │
+├─────────────────────────────────────────────────┤
+│ 1. User mượn sách → Notify ALL admins          │
+│ 2. Admin approve  → Notify user                 │
+│ 3. Admin reject   → Notify user                 │
+└─────────────────────────────────────────────────┘
 
----
-
-12) static/style.css
----------------------
-- Chứa nhiều style chung cho giao diện, auth pages, carousel, layout.
-
-Gợi ý:
-- Tách style admin nếu cần.
-
----
-
-GỢI Ý CẢI TIẾN CHUNG
----------------------
-- Dùng Flask-Migrate/Alembic cho quản lý migration thay vì gọi `db.create_all()` và ALTER TABLE runtime.
-- Sử dụng biến môi trường cho SECRET_KEY và DATABASE_URI.
-- Thêm CSRF protection (Flask-WTF) cho các POST form.
-- Xử lý concurrency khi mượn sách (optimistic locking hoặc SELECT FOR UPDATE) để tránh quantity âm khi nhiều người mượn cùng lúc.
-- Thêm tests đơn vị cho các flow mượn/trả/xóa user.
+Cách hoạt động:
+- Backend tạo bản ghi trong table `notification`
+- Frontend poll API /notification/notifications mỗi 30s
+- Hiển thị badge với số lượng unread
+- Click notification → redirect đến link liên quan
+- Mark as read khi click
+```
 
 ---
 
-Nếu bạn muốn, tôi có thể:
-- Chèn comment trực tiếp sâu hơn vào từng hàm (tôi đã thêm header + chú thích cơ bản vào file); hoặc
-- Viết tài liệu chi tiết hơn (per-function, per-parameter) vào file `DOCS/GHI_CHU.md` (có thể mở rộng).
+### 🔹 C. Chatbot AI Flow
 
-Hoàn tất: chỉnh sửa đã thêm các chú thích cơ bản vào mã nguồn và tạo file này.
+```
+1. User click chatbot button (bottom-right)
+2. Nhập câu hỏi (VD: "sách về lập trình python")
+3. Frontend POST /chat với message
+4. Backend:
+   ├─ Query ChromaDB (vector search trên book data)
+   ├─ Lấy top relevant books
+   ├─ Gửi context + user message đến Gemini API
+   └─ Trả về AI response
+5. Frontend hiển thị reply
+6. Lưu chat history vào localStorage (max 100 messages)
+```
+
+---
+
+## 3. CẤU TRÚC THƯ MỤC
+
+```
+Lib_Web/
+├── app.py                    # Entry point, khởi tạo Flask app
+├── config.py                 # Configuration (DB, upload, session)
+├── models.py                 # SQLAlchemy models
+├── decorators.py             # @admin_required, @login_required
+├── email_service.py          # Email sending (SMTP)
+├── phone_service.py          # SMS sending (Twilio) [optional]
+├── requirements.txt          # Python dependencies
+├── Procfile                  # For deployment (Heroku/Render)
+├── .env                      # Environment variables (SECRET!)
+├── .env.example              # Template for .env
+│
+├── routes/                   # Blueprint routes
+│   ├── main.py               # Homepage, books list, category
+│   ├── auth.py               # Login, register, logout, email verify
+│   ├── book.py               # Book detail, borrow
+│   ├── user.py               # Profile, borrows history
+│   ├── admin.py              # Admin dashboard, manage books/users/borrows
+│   ├── notification.py       # Notification API
+│   ├── chatbot.py            # Chatbot API
+│   └── google_oauth.py       # Google OAuth login
+│
+├── templates/
+│   ├── user/                 # User-facing templates
+│   │   ├── base.html         # Layout with navbar, notification bell
+│   │   ├── home.html         # Homepage with carousel
+│   │   ├── books.html        # Books list with search
+│   │   ├── book_detail.html  # Book detail with borrow modal
+│   │   ├── borrows.html      # Borrow history
+│   │   └── profile.html      # User profile
+│   ├── auth/                 # Authentication templates
+│   │   ├── login.html
+│   │   ├── register.html
+│   │   ├── verify_email.html
+│   │   ├── forgot_password.html
+│   │   └── reset_password.html
+│   └── admin/                # Admin templates
+│       ├── base.html         # Admin layout with sidebar
+│       ├── dashboard.html    # Statistics
+│       ├── books.html        # Manage books
+│       ├── users.html        # Manage users
+│       ├── borrows.html      # Manage borrow requests
+│       ├── add_book.html     # Add new book
+│       └── edit_book.html    # Edit book
+│
+├── static/
+│   ├── style.css             # Global styles
+│   ├── css/
+│   │   └── chatbot.css       # Chatbot UI styles
+│   ├── js/
+│   │   ├── main.js           # AJAX borrow, toast, password toggle
+│   │   └── chatbot.js        # Chatbot logic, chat history
+│   └── uploads/              # User avatars, book covers
+│
+├── chroma_db/                # ChromaDB vector database
+└── DOCS/                     # Documentation
+    └── GHI_CHU.md            # This file
+```
+
+---
+
+## 4. CHI TIẾT CÁC FILE CHÍNH
+
+### 📄 `app.py`
+**Mục đích:** Entry point, khởi tạo Flask app
+
+**Chức năng:**
+- Tạo Flask app từ `config.py`
+- Khởi tạo database (`db.create_all()`)
+- Đăng ký blueprints: `main_bp`, `auth_bp`, `book_bp`, `user_bp`, `admin_bp`, `notification_bp`, `chatbot_bp`
+- Set `SECRET_KEY` và `SESSION_COOKIE_NAME` dựa trên port (tránh conflict khi run nhiều instance)
+- Error handler cho `RequestEntityTooLarge` (file upload quá lớn)
+
+**Chạy:**
+```bash
+python3.10 app.py        # Run on port 8000
+python3.10 app.py 8001   # Run on port 8001
+```
+
+---
+
+### 📄 `config.py`
+**Mục đích:** Cấu hình Flask app
+
+**Nội dung:**
+- `SQLALCHEMY_DATABASE_URI`: MySQL connection string
+- `UPLOAD_FOLDER`: Thư mục lưu file upload
+- `ALLOWED_EXTENSIONS`: File extensions cho phép
+- `MAX_CONTENT_LENGTH`: Giới hạn kích thước upload (2MB)
+- `CATEGORY_MAP`: Map slug → display name cho danh mục sách
+- `allowed_file(filename)`: Helper check file extension
+
+---
+
+### 📄 `models.py`
+**Mục đích:** SQLAlchemy ORM models
+
+**Models:**
+
+#### 1. **User**
+```python
+- id: Primary key
+- username: Tên hiển thị
+- student_staff_id: MSSV/MSCB (UNIQUE, login)
+- email: Email (UNIQUE, verify)
+- phone: Phone number (UNIQUE, optional)
+- password_hash: Bcrypt hashed password
+- is_admin: Boolean
+- role: user/admin/librarian
+- avatar_url: Path to avatar image
+- is_email_verified: Boolean
+- email_verification_code: OTP code
+```
+
+#### 2. **Book**
+```python
+- id: Primary key
+- title: Tên sách
+- author: Tác giả
+- category: am_nhac/lap_trinh/truyen_tranh/y_hoc/tam_ly
+- image_url: Path to book cover
+- quantity: Tổng số lượng
+- available_quantity: Số lượng còn lại
+- is_active: Boolean (soft delete)
+- views_count: Lượt xem
+```
+
+#### 3. **Borrow**
+```python
+- id: Primary key
+- user_id: FK → User
+- book_id: FK → Book
+- borrow_date: Ngày mượn
+- expected_return_date: Ngày trả dự kiến
+- return_date: Ngày trả thực tế (NULL nếu chưa trả)
+- status: pending/approved/rejected
+- approved_by: FK → User (admin)
+- approved_at: Timestamp
+- book_title: Snapshot tên sách
+- return_condition: good/damaged/lost
+- return_notes: Ghi chú khi trả
+```
+
+#### 4. **Notification**
+```python
+- id: Primary key
+- recipient_id: FK → User
+- message: Nội dung thông báo
+- link: URL redirect khi click
+- is_read: Boolean
+- type: info/success/warning/error
+- created_at: Timestamp
+```
+
+#### 5. **Audit**
+```python
+- id: Primary key
+- action: approve_borrow/reject_borrow/create_book/delete_user...
+- actor_user_id: FK → User (người thực hiện)
+- target_borrow_id: FK → Borrow (nếu liên quan)
+- target_book_id: FK → Book (nếu liên quan)
+- details: JSON metadata
+- timestamp: Timestamp
+```
+
+---
+
+### 📄 `routes/main.py`
+**Blueprint:** `main_bp`
+
+**Routes:**
+- `GET /` → `index()`: Homepage (popular + latest books)
+- `GET /books` → `books()`: Danh sách sách (search + pagination)
+- `GET /category/<slug>` → `category()`: Lọc theo danh mục
+- `GET /_suggest_books` → Autocomplete search (AJAX)
+
+---
+
+### 📄 `routes/auth.py`
+**Blueprint:** `auth_bp`
+
+**Routes:**
+- `GET/POST /auth/login` → Đăng nhập
+- `GET /auth/logout` → Đăng xuất
+- `GET/POST /auth/register` → Đăng ký
+- `GET/POST /auth/verify-email` → Xác thực email (OTP)
+- `GET/POST /auth/forgot-password` → Quên mật khẩu
+- `GET/POST /auth/reset-password` → Đặt lại mật khẩu
+
+**Logic:**
+- Login: Tìm user theo `student_staff_id` HOẶC `email`, verify password
+- Register: Validate, hash password, tạo OTP, gửi email
+- Email verify: Check OTP, set `is_email_verified = True`
+
+---
+
+### 📄 `routes/book.py`
+**Blueprint:** `book_bp`
+
+**Routes:**
+- `GET /book/book/<book_id>` → `detail()`: Chi tiết sách
+- `POST /book/borrow/<book_id>` → `borrow()`: Mượn sách (form submission)
+
+**Logic mượn sách:**
+```python
+1. Check user đã đăng nhập
+2. Check duplicate borrow (pending/approved cho cùng book)
+3. Tạo Borrow record với status=PENDING
+4. GỬI NOTIFICATION cho ALL admins
+5. GỬI EMAIL xác nhận cho user
+6. Redirect về homepage với flash message
+```
+
+---
+
+### 📄 `routes/admin.py`
+**Blueprint:** `admin_bp` (require `@admin_required`)
+
+**Routes:**
+- `GET /admin/` → `dashboard()`: Thống kê
+- `GET /admin/books` → `books()`: Quản lý sách
+- `GET /admin/users` → `users()`: Quản lý users
+- `GET /admin/borrows` → `borrows()`: Quản lý yêu cầu mượn
+- `POST /admin/approve/<borrow_id>` → Duyệt yêu cầu
+- `POST /admin/reject/<borrow_id>` → Từ chối yêu cầu
+- `POST /admin/books/add` → Thêm sách mới
+- `POST /admin/books/edit/<book_id>` → Sửa sách
+- `POST /admin/books/delete/<book_id>` → Xóa sách
+
+**Logic approve borrow:**
+```python
+1. Tìm Borrow theo ID, check status=pending
+2. Giảm available_quantity của Book
+3. Update Borrow: status=approved, approved_by, approved_at
+4. Tạo Audit log
+5. GỬI EMAIL thông báo approved
+6. GỬI NOTIFICATION cho user
+7. Commit transaction
+```
+
+---
+
+### 📄 `routes/notification.py`
+**Blueprint:** `notification_bp`
+
+**Routes:**
+- `GET /notification/notifications` → Lấy danh sách notifications (JSON)
+- `POST /notification/notifications/mark-read/<id>` → Đánh dấu đã đọc
+- `POST /notification/notifications/mark-all-read` → Đánh dấu tất cả đã đọc
+
+**Response format:**
+```json
+{
+  "success": true,
+  "notifications": [
+    {
+      "id": 1,
+      "message": "Yêu cầu mượn sách đã được duyệt",
+      "link": "/user/borrows",
+      "is_read": false,
+      "type": "success",
+      "created_at": "2025-12-05 10:30:00"
+    }
+  ],
+  "unread_count": 1
+}
+```
+
+---
+
+### 📄 `routes/chatbot.py`
+**Blueprint:** `chatbot_bp`
+
+**Route:**
+- `POST /chat` → `chat()`: Xử lý chat message
+
+**Logic:**
+```python
+1. Nhận message từ user
+2. Query ChromaDB (vector search) → lấy top 5 relevant books
+3. Build context từ book results
+4. Gửi context + user message tới Gemini API
+5. Nhận AI response
+6. Return JSON: {"reply": "..."}
+```
+
+---
+
+### 📄 `static/js/main.js`
+**Mục đích:** Client-side interactions
+
+**Chức năng:**
+1. **AJAX Borrow** (deprecated, giờ dùng form modal)
+2. **Toast notifications** - `showToast(type, title, message)`
+3. **Password toggle** - Show/Hide password input
+4. **Search autocomplete** - Gợi ý sách khi gõ
+
+---
+
+### 📄 `static/js/chatbot.js`
+**Mục đích:** Chatbot UI & logic
+
+**Chức năng:**
+1. **UI Management:**
+   - Floating button (bottom-right)
+   - Chat box toggle
+   - Message rendering
+
+2. **Chat Logic:**
+   - Submit message → POST /chat
+   - Loading indicator (typing animation)
+   - Append bot reply
+
+3. **History Management:**
+   - Save chat history to localStorage
+   - Load history on page load
+   - Clear history button
+   - Max 100 messages
+
+---
+
+## 5. DATABASE MODELS
+
+### ERD (Simplified)
+```
+User (1) ──── (N) Borrow (N) ──── (1) Book
+  │                  │
+  │                  │
+  └─(1)──(N) Notification
+  │
+  └─(1)──(N) Audit
+```
+
+### Quan hệ:
+- 1 User có nhiều Borrow
+- 1 Book có nhiều Borrow
+- 1 User có nhiều Notification
+- 1 User (admin) có nhiều Audit actions
+
+---
+
+## 6. GỢI Ý CẢI TIẾN
+
+### 🔹 Security
+- [ ] Thêm CSRF protection (Flask-WTF)
+- [ ] Rate limiting cho login/register
+- [ ] SQL injection prevention (đã dùng ORM, nhưng cần check raw queries)
+- [ ] XSS protection (escape user input)
+
+### 🔹 Performance
+- [ ] Cache popular/latest books (Redis)
+- [ ] Optimize database queries (add indexes)
+- [ ] CDN cho static files
+- [ ] Pagination cho admin views
+
+### 🔹 UX
+- [ ] Real-time notifications (WebSocket thay vì polling)
+- [ ] Email templates với HTML (đẹp hơn)
+- [ ] Push notifications (PWA)
+- [ ] Dark mode
+
+### 🔹 Code Quality
+- [ ] Dùng Flask-Migrate cho database migrations
+- [ ] Unit tests (pytest)
+- [ ] API documentation (Swagger)
+- [ ] Environment-based config (dev/staging/prod)
+
+### 🔹 Features
+- [ ] Đánh giá & review sách
+- [ ] Wishlist
+- [ ] Gia hạn mượn sách
+- [ ] Phạt trễ hạn
+- [ ] Export reports (Excel/PDF)
+
+---
+
+## 📞 SUPPORT
+
+**Email:** quochuyphan2k5@gmail.com  
+**Phone:** 0917715034
+
+---
+
+**Ngày cập nhật:** 2025-12-05  
+**Phiên bản:** 2.0 (Với borrow approval system & notifications)

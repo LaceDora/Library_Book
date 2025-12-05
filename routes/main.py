@@ -14,7 +14,14 @@ from config import CATEGORY_MAP
 from flask import jsonify, url_for
 from sqlalchemy import or_
 
+
 main = Blueprint('main', __name__)
+
+# Route debug session cho kiểm tra OAuth
+@main.route('/whoami')
+def whoami():
+    from flask import session, jsonify
+    return jsonify(dict(session))
 
 
 @main.route("/")
@@ -24,9 +31,9 @@ def index():
     - popular: lấy sách theo `quantity` giảm dần (giả sử quantity phản ánh mức phổ biến)
     - latest: lấy các sách mới thêm (sắp xếp theo id giảm dần)
     """
-    popular = Book.query.filter_by(is_active=True).order_by(Book.quantity.desc(), Book.id.desc()).limit(8).all()
-    latest = Book.query.filter_by(is_active=True).order_by(Book.id.desc()).limit(8).all()
-    return render_template("home.html", popular=popular, latest=latest)
+    popular = Book.query.filter_by(is_active=True).order_by(Book.quantity.desc(), Book.id.desc()).limit(9).all()
+    latest = Book.query.filter_by(is_active=True).order_by(Book.id.desc()).limit(9).all()
+    return render_template("user/home.html", popular=popular, latest=latest)
 
 
 @main.route("/books")
@@ -44,7 +51,7 @@ def books():
         # Lọc theo title hoặc author chứa chuỗi tìm kiếm
         query = query.filter(Book.title.like(f"%{search}%") | Book.author.like(f"%{search}%"))
     paginated = query.order_by(Book.id.desc()).paginate(page=page, per_page=9)
-    return render_template("books.html", books=paginated, category=None, category_slug=None)
+    return render_template("user/books.html", books=paginated, category=None, category_slug=None)
 
 
 @main.route('/category/<slug>')
@@ -64,7 +71,7 @@ def category(slug):
     if search:
         query = query.filter(Book.title.like(f"%{search}%") | Book.author.like(f"%{search}%"))
     paginated = query.order_by(Book.id.desc()).paginate(page=page, per_page=9)
-    return render_template('books.html', books=paginated, category=display, category_slug=slug)
+    return render_template('user/books.html', books=paginated, category=display, category_slug=slug)
 
 
 @main.route('/_suggest_books')
